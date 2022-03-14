@@ -34,7 +34,7 @@ func GetGitOpsEngineSingleInstanceNamespace() string {
 }
 
 func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceNamespace v1.Namespace,
-	dbq db.DatabaseQueries, log logr.Logger) (*db.ManagedEnvironment, error) {
+	dbq db.DatabaseQueries, log logr.Logger) (*db.ManagedEnvironment, error, bool) {
 
 	workspaceNamespaceUID := string(workspaceNamespace.UID)
 
@@ -57,12 +57,12 @@ func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceN
 
 		if err == nil {
 			// Success: mapping exists, and so does the environment it points to
-			return &managedEnvironment, nil
+			return &managedEnvironment, nil, false
 		}
 
 		if !db.IsResultNotFoundError(err) {
 			// Failure: A generic error occurred.
-			return nil, fmt.Errorf("unable to retrieve resource mapping: %v", err)
+			return nil, fmt.Errorf("unable to retrieve resource mapping: %v", err), false
 		}
 
 		// At this point, we found the mapping, but didn't find the ManagedEnvironment that the
@@ -70,11 +70,11 @@ func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceN
 
 		// Since the managed environment doesn't exist, delete the mapping; it will be recreated below.
 		if _, err := dbq.DeleteKubernetesResourceToDBResourceMapping(ctx, dbResourceMapping); err != nil {
-			return nil, fmt.Errorf("unable to delete K8s resource to DB mapping: %v", dbResourceMapping)
+			return nil, fmt.Errorf("unable to delete K8s resource to DB mapping: %v", dbResourceMapping), false
 		}
 
 	} else if !db.IsResultNotFoundError(err) {
-		return nil, fmt.Errorf("unable to retrieve resource mapping: %v", err)
+		return nil, fmt.Errorf("unable to retrieve resource mapping: %v", err), false
 	}
 
 	// At this point in the function, both the managed environment and mapping necessarily don't exist
@@ -90,7 +90,7 @@ func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceN
 		Serviceaccount_ns:           "serviceaccount_ns",
 	}
 	if err := dbq.CreateClusterCredentials(ctx, &clusterCreds); err != nil {
-		return nil, fmt.Errorf("unable to create cluster creds for managed env: %v", err)
+		return nil, fmt.Errorf("unable to create cluster creds for managed env: %v", err), false
 	}
 
 	managedEnvironment := db.ManagedEnvironment{
@@ -98,7 +98,7 @@ func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceN
 		Clustercredentials_id: clusterCreds.Clustercredentials_cred_id,
 	}
 	if err := dbq.CreateManagedEnvironment(ctx, &managedEnvironment); err != nil {
-		return nil, fmt.Errorf("unable to create managed env: %v", err)
+		return nil, fmt.Errorf("unable to create managed env: %v", err), false
 	}
 
 	dbResourceMapping = &db.KubernetesToDBResourceMapping{
@@ -109,22 +109,22 @@ func GetOrCreateManagedEnvironmentByNamespaceUID(ctx context.Context, workspaceN
 	}
 
 	if err := dbq.CreateKubernetesResourceToDBResourceMapping(ctx, dbResourceMapping); err != nil {
-		return nil, fmt.Errorf("unable to create KubernetesResourceToDBResourceMapping: %v", err)
+		return nil, fmt.Errorf("unable to create KubernetesResourceToDBResourceMapping: %v", err), false
 	}
 
-	return &managedEnvironment, nil
+	return &managedEnvironment, nil, true
 }
 
 // GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID gets (or creates it if it doesn't exist) a GitOpsEngineInstance database entry that
 // corresponds to an GitOps engine instance running on the cluster.
 func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 	gitopsEngineNamespace v1.Namespace, kubesystemNamespaceUID string,
-	dbq db.DatabaseQueries, log logr.Logger) (*db.GitopsEngineInstance, *db.GitopsEngineCluster, error) {
+	dbq db.DatabaseQueries, log logr.Logger) (*db.GitopsEngineInstance, bool, *db.GitopsEngineCluster, error) {
 
 	// First create the GitOpsEngine cluster if needed; this will be used to create the instance.
 	gitopsEngineCluster, err := GetOrCreateGitopsEngineClusterByKubeSystemNamespaceUID(ctx, kubesystemNamespaceUID, dbq, log)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to create GitOpsEngineCluster for '%v', error: '%v'", kubesystemNamespaceUID, err)
+		return nil, false, nil, fmt.Errorf("unable to create GitOpsEngineCluster for '%v', error: '%v'", kubesystemNamespaceUID, err)
 	}
 
 	var gitopsEngineInstance *db.GitopsEngineInstance
@@ -144,7 +144,7 @@ func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 	if err := dbq.GetDBResourceMappingForKubernetesResource(ctx, dbResourceMapping); err != nil {
 
 		if !db.IsResultNotFoundError(err) {
-			return nil, nil, fmt.Errorf("unable to get DBResourceMapping for getOrCreateGitopsEngineInstanceByInstanceNamespaceUID: %v", err)
+			return nil, false, nil, fmt.Errorf("unable to get DBResourceMapping for getOrCreateGitopsEngineInstanceByInstanceNamespaceUID: %v", err)
 		}
 
 		dbResourceMapping = nil
@@ -157,7 +157,7 @@ func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 
 		if err := dbq.GetGitopsEngineInstanceById(ctx, gitopsEngineInstance); err != nil {
 			if !db.IsResultNotFoundError(err) {
-				return nil, nil, err
+				return nil, false, nil, err
 			}
 
 			log.V(util.LogLevel_Warn).Error(nil, "GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID found a resource mapping, but no engine instance.")
@@ -165,7 +165,7 @@ func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 			// We have found a mapping without the corresponding mapped entity, so delete the mapping.
 			// (We will recreate the mapping below)
 			if _, err := dbq.DeleteKubernetesResourceToDBResourceMapping(ctx, dbResourceMapping); err != nil {
-				return nil, nil, err
+				return nil, false, nil, err
 			}
 
 			gitopsEngineInstance = nil
@@ -173,12 +173,12 @@ func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 		} else {
 
 			if gitopsEngineInstance.EngineCluster_id != gitopsEngineCluster.Gitopsenginecluster_id {
-				return nil, nil, fmt.Errorf("able to locate engine instance, and engine cluster, but they mismatched: instance id: %v, cluster id: %v",
+				return nil, false, nil, fmt.Errorf("able to locate engine instance, and engine cluster, but they mismatched: instance id: %v, cluster id: %v",
 					gitopsEngineInstance.Gitopsengineinstance_id, gitopsEngineCluster.Gitopsenginecluster_id)
 			}
 
 			// Success: both existed.
-			return gitopsEngineInstance, gitopsEngineCluster, nil
+			return gitopsEngineInstance, false, gitopsEngineCluster, nil
 		}
 	}
 
@@ -192,42 +192,42 @@ func GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx context.Context,
 		}
 
 		if err := dbq.CreateGitopsEngineInstance(ctx, gitopsEngineInstance); err != nil {
-			return nil, nil, fmt.Errorf("unable to create engine instance, when neither existed: %v", err)
+			return nil, false, nil, fmt.Errorf("unable to create engine instance, when neither existed: %v", err)
 		}
 
 		expectedDBResourceMapping.DBRelationKey = gitopsEngineInstance.Gitopsengineinstance_id
 		if err := dbq.CreateKubernetesResourceToDBResourceMapping(ctx, &expectedDBResourceMapping); err != nil {
-			return nil, nil, fmt.Errorf("unable to create mapping when neither existed: %v", err)
+			return nil, false, nil, fmt.Errorf("unable to create mapping when neither existed: %v", err)
 		}
 
-		return gitopsEngineInstance, gitopsEngineCluster, nil
+		return gitopsEngineInstance, true, gitopsEngineCluster, nil
 
 	} else if dbResourceMapping != nil && gitopsEngineInstance == nil {
 		// Scenario B) this shouldn't happen: the above logic should ensure that dbResourceMapping is always nil, if gitopsEngineInstance is nil
-		return nil, nil, fmt.Errorf("SEVERE: the dbResourceMapping existed, but the gitops engine instance did not")
+		return nil, false, nil, fmt.Errorf("SEVERE: the dbResourceMapping existed, but the gitops engine instance did not")
 
 	} else if dbResourceMapping == nil && gitopsEngineInstance != nil {
 		// Scenario C) this will happen if the instance exists, but there is no mapping for it
 
 		expectedDBResourceMapping.DBRelationKey = gitopsEngineInstance.Gitopsengineinstance_id
 		if err := dbq.CreateKubernetesResourceToDBResourceMapping(ctx, &expectedDBResourceMapping); err != nil {
-			return nil, nil, fmt.Errorf("unable to create mapping when dbResourceMapping didn't exist: %v", err)
+			return nil, false, nil, fmt.Errorf("unable to create mapping when dbResourceMapping didn't exist: %v", err)
 		}
 
-		return gitopsEngineInstance, gitopsEngineCluster, nil
+		return gitopsEngineInstance, false, gitopsEngineCluster, nil
 
 	} else if dbResourceMapping != nil && gitopsEngineInstance != nil {
 		// Scenario D) both exist, so just return the cluster
 
 		if gitopsEngineInstance.EngineCluster_id != gitopsEngineCluster.Gitopsenginecluster_id {
-			return nil, nil, fmt.Errorf("able to locate engine instance, and engine cluster, but they mismatched: instance id: %v, cluster id: %v",
+			return nil, false, nil, fmt.Errorf("able to locate engine instance, and engine cluster, but they mismatched: instance id: %v, cluster id: %v",
 				gitopsEngineInstance.Gitopsengineinstance_id, gitopsEngineCluster.Gitopsenginecluster_id)
 		}
 
-		return gitopsEngineInstance, gitopsEngineCluster, nil
+		return gitopsEngineInstance, false, gitopsEngineCluster, nil
 
 	} else {
-		return nil, nil, fmt.Errorf("unexpected state in GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID")
+		return nil, false, nil, fmt.Errorf("unexpected state in GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID")
 	}
 
 }
