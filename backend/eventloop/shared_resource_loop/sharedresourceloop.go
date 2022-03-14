@@ -42,7 +42,7 @@ type SharedResourceEventLoop struct {
 }
 
 func (srEventLoop *SharedResourceEventLoop) GetOrCreateClusterUserByNamespaceUID(ctx context.Context, workspaceClient client.Client,
-	workspaceNamespace corev1.Namespace) (*db.ClusterUser, error) {
+	workspaceNamespace corev1.Namespace) (*db.ClusterUser, error, bool) {
 
 	responseChannel := make(chan interface{})
 
@@ -60,15 +60,15 @@ func (srEventLoop *SharedResourceEventLoop) GetOrCreateClusterUserByNamespaceUID
 	select {
 	case rawResponse = <-responseChannel:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("context cancelled in getOrCreateClusterUserByNamespaceUID")
+		return nil, fmt.Errorf("context cancelled in getOrCreateClusterUserByNamespaceUID"), false
 	}
 
 	response, ok := rawResponse.(sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDResponse)
 	if !ok {
-		return nil, fmt.Errorf("SEVERE: unexpected response type")
+		return nil, fmt.Errorf("SEVERE: unexpected response type"), false
 	}
 
-	return response.clusterUser, response.err
+	return response.clusterUser, response.err, response.isNewUser
 
 }
 
@@ -108,8 +108,8 @@ func (srEventLoop *SharedResourceEventLoop) GetGitopsEngineInstanceById(ctx cont
 // Ensure the user's workspace is configured, ensure a GitOpsEngineInstance exists that will target it, and ensure
 // a cluster access exists the give the user permission to target them from the engine.
 func (srEventLoop *SharedResourceEventLoop) GetOrCreateSharedResources(ctx context.Context,
-	workspaceClient client.Client, workspaceNamespace corev1.Namespace) (*db.ClusterUser,
-	*db.ManagedEnvironment, *db.GitopsEngineInstance, *db.ClusterAccess, error) {
+	workspaceClient client.Client, workspaceNamespace corev1.Namespace) (*db.ClusterUser, bool,
+	*db.ManagedEnvironment, bool, *db.GitopsEngineInstance, bool, *db.ClusterAccess, bool, *db.GitopsEngineCluster, error) {
 
 	responseChannel := make(chan interface{})
 
@@ -127,16 +127,24 @@ func (srEventLoop *SharedResourceEventLoop) GetOrCreateSharedResources(ctx conte
 	select {
 	case rawResponse = <-responseChannel:
 	case <-ctx.Done():
-		return nil, nil, nil, nil, fmt.Errorf("context cancelled in getOrCreateSharedResources")
+		return nil, false, nil, false, nil, false, nil, false, nil, fmt.Errorf("context cancelled in getOrCreateSharedResources")
 	}
 
 	response, ok := rawResponse.(sharedResourceLoopMessage_getOrCreateSharedResourcesResponse)
 	if !ok {
-		return nil, nil, nil, nil, fmt.Errorf("SEVERE: unexpected response type")
+		return nil, false, nil, false, nil, false, nil, false, nil, fmt.Errorf("SEVERE: unexpected response type")
 	}
 
-	return response.clusterUser, response.managedEnv, response.gitopsEngineInstance, response.clusterAccess, nil
-
+	return response.clusterUser,
+		response.isNewUser,
+		response.managedEnv,
+		response.isNewManagedEnv,
+		response.gitopsEngineInstance,
+		response.isNewInstance,
+		response.clusterAccess,
+		response.isNewClusterAccess,
+		response.gitopsEngineCluster,
+		nil
 }
 
 func NewSharedResourceLoop() *SharedResourceEventLoop {
@@ -177,9 +185,14 @@ type sharedResourceLoopMessage_getGitopsEngineInstanceByIdResponse struct {
 type sharedResourceLoopMessage_getOrCreateSharedResourcesResponse struct {
 	err                  error
 	clusterUser          *db.ClusterUser
+	isNewUser            bool
 	managedEnv           *db.ManagedEnvironment
+	isNewManagedEnv      bool
 	gitopsEngineInstance *db.GitopsEngineInstance
+	isNewInstance        bool
 	clusterAccess        *db.ClusterAccess
+	isNewClusterAccess   bool
+	gitopsEngineCluster  *db.GitopsEngineCluster
 }
 
 type sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDRequest struct {
@@ -189,6 +202,7 @@ type sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDRequest struc
 type sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDResponse struct {
 	err         error
 	clusterUser *db.ClusterUser
+	isNewUser   bool
 }
 
 func internalSharedResourceEventLoop(inputChan chan sharedResourceLoopMessage) {
@@ -218,14 +232,28 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 	log.V(sharedutil.LogLevel_Debug).Info("sharedResourceEventLoop received message: "+string(msg.messageType), "workspace", msg.workspaceNamespace.UID)
 
 	if msg.messageType == sharedResourceLoopMessage_getOrCreateSharedResources {
-		clusterUser, managedEnv, gitopsEngineInstance, clusterAccess, err := internalProcessMessage_GetOrCreateSharedResources(ctx, msg.workspaceClient, msg.workspaceNamespace, dbQueries, log)
+		clusterUser,
+			isNewUser,
+			managedEnv,
+			isNewManagedEnv,
+			gitopsEngineInstance,
+			isNewInstance,
+			clusterAccess,
+			isNewClusterAccess,
+			gitopsEngineCluster,
+			err := internalProcessMessage_GetOrCreateSharedResources(ctx, msg.workspaceClient, msg.workspaceNamespace, dbQueries, log)
 
 		response := sharedResourceLoopMessage_getOrCreateSharedResourcesResponse{
 			err:                  err,
 			clusterUser:          clusterUser,
+			isNewUser:            isNewUser,
 			managedEnv:           managedEnv,
+			isNewManagedEnv:      isNewManagedEnv,
 			gitopsEngineInstance: gitopsEngineInstance,
+			isNewInstance:        isNewInstance,
 			clusterAccess:        clusterAccess,
+			isNewClusterAccess:   isNewClusterAccess,
+			gitopsEngineCluster:  gitopsEngineCluster,
 		}
 
 		// Reply on a separate goroutine so cancelled callers don't block the event loop
@@ -235,11 +263,12 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 
 	} else if msg.messageType == sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUID {
 
-		clusterUser, err := internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx, msg.workspaceNamespace, dbQueries)
+		clusterUser, err, isNewUser := internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx, msg.workspaceNamespace, dbQueries)
 
 		response := sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDResponse{
 			err:         err,
 			clusterUser: clusterUser,
+			isNewUser:   isNewUser,
 		}
 
 		// Reply on a separate goroutine so cancelled callers don't block the event loop
@@ -283,13 +312,12 @@ func internalProcessMessage_GetGitopsEngineInstanceById(ctx context.Context, id 
 	}
 
 	err := dbq.GetGitopsEngineInstanceById(ctx, &gitopsEngineInstance)
-
 	return &gitopsEngineInstance, err
 }
 
 func internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx context.Context, workspaceNamespace corev1.Namespace,
-	dbq db.DatabaseQueries) (*db.ClusterUser, error) {
-
+	dbq db.DatabaseQueries) (*db.ClusterUser, error, bool) {
+	isNewUser := false
 	// TODO: GITOPSRVCE-19 - KCP support: for now, we assume that the namespace UID that the request occurred in is the user id.
 	clusterUser := db.ClusterUser{User_name: string(workspaceNamespace.UID)}
 
@@ -297,40 +325,41 @@ func internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx context.Con
 	err := dbq.GetClusterUserByUsername(ctx, &clusterUser)
 	if err != nil {
 		if db.IsResultNotFoundError(err) {
+			isNewUser = true
 
 			if err := dbq.CreateClusterUser(ctx, &clusterUser); err != nil {
-				return nil, err
+				return nil, err, false
 			}
 
 		} else {
-			return nil, err
+			return nil, err, false
 		}
 	}
 
-	return &clusterUser, nil
+	return &clusterUser, nil, isNewUser
 }
 
 // Ensure the user's workspace is configured, ensure a GitOpsEngineInstance exists that will target it, and ensure
 // a cluster access exists the give the user permission to target them from the engine.
 func internalProcessMessage_GetOrCreateSharedResources(ctx context.Context, workspaceClient client.Client,
 	workspaceNamespace corev1.Namespace, dbQueries db.DatabaseQueries,
-	log logr.Logger) (*db.ClusterUser, *db.ManagedEnvironment, *db.GitopsEngineInstance, *db.ClusterAccess, error) {
+	log logr.Logger) (*db.ClusterUser, bool, *db.ManagedEnvironment, bool, *db.GitopsEngineInstance, bool, *db.ClusterAccess, bool, *db.GitopsEngineCluster, error) {
 
-	clusterUser, err := internalGetOrCreateClusterUserByNamespaceUID(ctx, string(workspaceNamespace.UID), dbQueries)
+	clusterUser, err, isNewUser := internalGetOrCreateClusterUserByNamespaceUID(ctx, string(workspaceNamespace.UID), dbQueries)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("unable to retrieve cluster user in processMessage, '%s': %v", string(workspaceNamespace.UID), err)
+		return nil, false, nil, false, nil, false, nil, false, nil, fmt.Errorf("unable to retrieve cluster user in processMessage, '%s': %v", string(workspaceNamespace.UID), err)
 	}
 
-	managedEnv, err := dbutil.GetOrCreateManagedEnvironmentByNamespaceUID(ctx, workspaceNamespace, dbQueries, log)
+	managedEnv, err, isNewManagedEnv := dbutil.GetOrCreateManagedEnvironmentByNamespaceUID(ctx, workspaceNamespace, dbQueries, log)
 	if err != nil {
 		log.Error(err, "unable to get or created managed env on deployment modified event")
-		return nil, nil, nil, nil, err
+		return nil, false, nil, false, nil, false, nil, false, nil, err
 	}
 
-	engineInstance, err := internalDetermineGitOpsEngineInstanceForNewApplication(ctx, *clusterUser, *managedEnv, workspaceClient, dbQueries, log)
+	engineInstance, isNewInstance, gitopsEngineCluster, err := internalDetermineGitOpsEngineInstanceForNewApplication(ctx, *clusterUser, *managedEnv, workspaceClient, dbQueries, log)
 	if err != nil {
 		log.Error(err, "unable to determine gitops engine instance")
-		return nil, nil, nil, nil, err
+		return nil, false, nil, false, nil, false, nil, false, nil, err
 	}
 
 	// Create the cluster access object, to allow us to interact with the GitOpsEngine and ManagedEnvironment on the user's behalf
@@ -340,13 +369,22 @@ func internalProcessMessage_GetOrCreateSharedResources(ctx context.Context, work
 		Clusteraccess_gitops_engine_instance_id: engineInstance.Gitopsengineinstance_id,
 	}
 
-	if err := internalGetOrCreateClusterAccess(ctx, &ca, dbQueries); err != nil {
+	err, isNewClusterAccess := internalGetOrCreateClusterAccess(ctx, &ca, dbQueries)
+	if err != nil {
 		log.Error(err, "unable to create cluster access")
-		return nil, nil, nil, nil, err
+		return nil, false, nil, false, nil, false, nil, false, nil, err
 	}
 
-	return clusterUser, managedEnv, engineInstance, &ca, nil
-
+	return clusterUser,
+		isNewUser,
+		managedEnv,
+		isNewManagedEnv,
+		engineInstance,
+		isNewInstance,
+		&ca,
+		isNewClusterAccess,
+		gitopsEngineCluster,
+		nil
 }
 
 // Whenever a new Argo CD Application needs to be created, we need to find an Argo CD instance
@@ -359,21 +397,21 @@ func internalProcessMessage_GetOrCreateSharedResources(ctx context.Context, work
 //
 // This logic would be improved by https://issues.redhat.com/browse/GITOPSRVCE-73 (and others)
 func internalDetermineGitOpsEngineInstanceForNewApplication(ctx context.Context, user db.ClusterUser, managedEnv db.ManagedEnvironment,
-	k8sClient client.Client, dbq db.DatabaseQueries, log logr.Logger) (*db.GitopsEngineInstance, error) {
+	k8sClient client.Client, dbq db.DatabaseQueries, log logr.Logger) (*db.GitopsEngineInstance, bool, *db.GitopsEngineCluster, error) {
 
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: dbutil.GetGitOpsEngineSingleInstanceNamespace(), Namespace: dbutil.GetGitOpsEngineSingleInstanceNamespace()}}
 	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(namespace), namespace); err != nil {
-		return nil, fmt.Errorf("unable to retrieve gitopsengine namespace in determineGitOpsEngineInstanceForNewApplication")
+		return nil, false, nil, fmt.Errorf("unable to retrieve gitopsengine namespace in determineGitOpsEngineInstanceForNewApplication")
 	}
 
 	kubeSystemNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", Namespace: "kube-system"}}
 	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(kubeSystemNamespace), kubeSystemNamespace); err != nil {
-		return nil, fmt.Errorf("unable to retrieve kube-system namespace in determineGitOpsEngineInstanceForNewApplication")
+		return nil, false, nil, fmt.Errorf("unable to retrieve kube-system namespace in determineGitOpsEngineInstanceForNewApplication")
 	}
 
-	gitopsEngineInstance, _, err := dbutil.GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx, *namespace, string(kubeSystemNamespace.UID), dbq, log)
+	gitopsEngineInstance, isNewInatance, gitopsEngineCluster, err := dbutil.GetOrCreateGitopsEngineInstanceByInstanceNamespaceUID(ctx, *namespace, string(kubeSystemNamespace.UID), dbq, log)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get or create engine instance for new application: %v", err)
+		return nil, false, nil, fmt.Errorf("unable to get or create engine instance for new application: %v", err)
 	}
 
 	// When we support multiple Argo CD instance, the algorithm would be:
@@ -388,44 +426,45 @@ func internalDetermineGitOpsEngineInstanceForNewApplication(ctx context.Context,
 	// In a way that ensures that applications are balanced between instances.
 	// Preliminary thoughts: https://docs.google.com/document/d/15E8d5frNuTFEdCHMlNSk0LQr6DI7BtiypxIC2AnW-OQ/edit#
 
-	return gitopsEngineInstance, nil
+	return gitopsEngineInstance, isNewInatance, gitopsEngineCluster, nil
 }
 
-func internalGetOrCreateClusterAccess(ctx context.Context, ca *db.ClusterAccess, dbq db.DatabaseQueries) error {
+func internalGetOrCreateClusterAccess(ctx context.Context, ca *db.ClusterAccess, dbq db.DatabaseQueries) (error, bool) {
 
 	if err := dbq.GetClusterAccessByPrimaryKey(ctx, ca); err != nil {
 
 		if !db.IsResultNotFoundError(err) {
-			return err
+			return err, false
 		}
 	} else {
-		return nil
+		return nil, false
 	}
 
 	if err := dbq.CreateClusterAccess(ctx, ca); err != nil {
-		return err
+		return err, false
 	}
 
-	return nil
+	return nil, true
 }
 
-func internalGetOrCreateClusterUserByNamespaceUID(ctx context.Context, namespaceUID string, dbq db.DatabaseQueries) (*db.ClusterUser, error) {
-
+func internalGetOrCreateClusterUserByNamespaceUID(ctx context.Context, namespaceUID string, dbq db.DatabaseQueries) (*db.ClusterUser, error, bool) {
+	isNewUser := false
 	// TODO: GITOPSRVCE-19 - KCP support: for now, we assume that the namespace UID that the request occurred in is the user id.
 	clusterUser := db.ClusterUser{User_name: namespaceUID}
 
 	err := dbq.GetClusterUserByUsername(ctx, &clusterUser)
 	if err != nil {
 		if db.IsResultNotFoundError(err) {
+			isNewUser = true
 
 			if err := dbq.CreateClusterUser(ctx, &clusterUser); err != nil {
-				return nil, err
+				return nil, err, false
 			}
 
 		} else {
-			return nil, err
+			return nil, err, false
 		}
 	}
 
-	return &clusterUser, nil
+	return &clusterUser, nil, isNewUser
 }
