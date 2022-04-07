@@ -1,6 +1,8 @@
 package eventloop
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -207,31 +209,32 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
+			// The number of event loops created before we started the test
+			originalNumberOfEventLoopsCreated := tAELF.numberOfEventLoopsCreated
+
 			// Create goroutine and pass event,
 			//because loop in workspaceEventLoopRouter will keep on waiting for new event to be received and test will get stuck here.
 			go func() {
-				defer GinkgoRecover()
 
 				inputChannel <- msg
-				result := <-tAELF.outputChannel
-
-				Expect(result).NotTo(BeNil())
-				Expect(result.Event).To(Equal(msg.Event))
-				Expect(result.MessageType).To(Equal(msg.MessageType))
+				// We don't read from the channel here, because this will cause us to
+				// miss the event when we tried to read from it elsewhere.
 			}()
 
-			// Consider test case passed if application event loop is not created in 5 seconds.
-			Consistently(tAELF.numberOfEventLoopsCreated, "5s").Should(Equal(2))
+			// Consider test case passed if a new application event loop is not created in 5 seconds.
+			Consistently(tAELF.numberOfEventLoopsCreated, "5s").Should(Equal(originalNumberOfEventLoopsCreated),
+				"the number of event loops shoulnd't change")
 
 		})
 
 		It("Should unorphan previous GitOpsDeploymentSyncRun event if parent GitOpsDeployment event is passed and new application event loop should be created.", func() {
 
+			By("creating a new GitOpsDeployment resource, that the GitOpsDeploymentSyncRun was missing from the previous step.")
 			gitopsDepl := &managedgitopsv1alpha1.GitOpsDeployment{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "my-gitops-depl-sync",
+					Name:      "dummy-deployment",
 					Namespace: apiNamespace.Name,
-					UID:       "C",
+					UID:       "D",
 				},
 				Spec: managedgitopsv1alpha1.GitOpsDeploymentSpec{
 					Source: managedgitopsv1alpha1.ApplicationSource{},
@@ -248,8 +251,8 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 					EventType: eventlooptypes.DeploymentModified,
 					Request: reconcile.Request{
 						NamespacedName: types.NamespacedName{
-							Namespace: apiNamespace.Name,
-							Name:      apiNamespace.Name,
+							Namespace: apiNamespace.Namespace,
+							Name:      gitopsDepl.Name,
 						},
 					},
 					Client:                  k8sClientOuter,
@@ -263,15 +266,23 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 			//because loop in workspaceEventLoopRouter will keep on waiting for new event to be received and test will get stuck here.
 			go func() {
 				inputChannel <- msg
-				result := <-tAELF.outputChannel
-
-				Expect(result).NotTo(BeNil())
-				//Expect(result.Event).To(Equal(msg.Event))
-				//Expect(result.MessageType).To(Equal(msg.MessageType))
 			}()
 
-			//Consistently(tAELF.numberOfEventLoopsCreated, "10s").Should(Equal(3))
-			Expect(tAELF.numberOfEventLoopsCreated).To(Equal(3))
+			Eventually(func() bool {
+				// We use a function here to check if number is 3
+				return tAELF.numberOfEventLoopsCreated == 3
+			}).Should(BeTrue())
+
+			By("Read the events from the output channel, make sure they are the ones we expect, now that the gitopsdeploymentsyncrun in unorphaned")
+
+			deploymentModifiedMsg := <-tAELF.outputChannel
+			fmt.Println(deploymentModifiedMsg)
+			// TODO: Make sure this is the gitopsdeployment event from above
+
+			syncRunModifiedMsg := <-tAELF.outputChannel
+			fmt.Println(syncRunModifiedMsg)
+			// TODO: Make sure this is the gitopsdeploymentsyncrun event from above
+
 		})
 
 	})
@@ -292,5 +303,8 @@ func (ta *testApplicationEventLoopFactory) startApplicationEventQueueLoop(gitops
 
 	// Increase count by 1 if new application event loop is created
 	ta.numberOfEventLoopsCreated++
+
+	fmt.Println("mock startApplicationEventQueueLoop was called: "+gitopsDeplID, ta.numberOfEventLoopsCreated)
+
 	return ta.outputChannel
 }
