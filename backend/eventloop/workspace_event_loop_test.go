@@ -1,8 +1,6 @@
 package eventloop
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -17,21 +15,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// This test scenario requires, tests to run in order, hence using 'Ordered' decorator.
 var _ = Describe("Workspace Event Loop Test", Ordered, func() {
+
+	var err error
 	var scheme *runtime.Scheme
+	var apiNamespace *v1.Namespace
 	var argocdNamespace *v1.Namespace
 	var kubesystemNamespace *v1.Namespace
-	var apiNamespace *v1.Namespace
-	var err error
-	var inputChannel chan eventlooptypes.EventLoopMessage
 	var tAELF *testApplicationEventLoopFactory
+	var msgTemp eventlooptypes.EventLoopMessage
+	var inputChannel chan eventlooptypes.EventLoopMessage
 
 	Context("Workspace event loop responds to channel events", func() {
 
 		// Start the workspace event loop using single ApplicationEventLoopFactory object,
 		// this way all tests can keep track of number of event loops created by other tests.
 		BeforeAll(func() {
-			scheme, argocdNamespace, kubesystemNamespace, apiNamespace, err = eventlooptypes.GenericTestSetup()
+			scheme,
+				argocdNamespace,
+				kubesystemNamespace,
+				apiNamespace,
+				err = eventlooptypes.GenericTestSetup()
+
 			Expect(err).To(BeNil())
 
 			tAELF = &testApplicationEventLoopFactory{
@@ -57,7 +63,10 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
-			k8sClientOuter := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).Build()
+			k8sClientOuter := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
 
 			// Simulate a GitOpsDeployment modified event
 			msg := eventlooptypes.EventLoopMessage{
@@ -100,7 +109,10 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
-			k8sClientOuter := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).Build()
+			k8sClientOuter := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
 
 			// Simulate a GitOpsDeployment modified event
 			msg := eventlooptypes.EventLoopMessage{
@@ -144,7 +156,10 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
-			k8sClientOuter := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).Build()
+			k8sClientOuter := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
 
 			// Simulate a GitOpsDeployment modified event
 			msg := eventlooptypes.EventLoopMessage{
@@ -189,7 +204,10 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
-			k8sClientOuter := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gitopsDeplSyncRun, apiNamespace, argocdNamespace, kubesystemNamespace).Build()
+			k8sClientOuter := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(gitopsDeplSyncRun, apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
 
 			// Simulate a GitOpsDeploymentSyncRun event
 			msg := eventlooptypes.EventLoopMessage{
@@ -209,6 +227,9 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
+			// To share it with the next test
+			msgTemp = msg
+
 			// The number of event loops created before we started the test
 			originalNumberOfEventLoopsCreated := tAELF.numberOfEventLoopsCreated
 
@@ -224,12 +245,12 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 			// Consider test case passed if a new application event loop is not created in 5 seconds.
 			Consistently(tAELF.numberOfEventLoopsCreated, "5s").Should(Equal(originalNumberOfEventLoopsCreated),
 				"the number of event loops shoulnd't change")
-
 		})
 
 		It("Should unorphan previous GitOpsDeploymentSyncRun event if parent GitOpsDeployment event is passed and new application event loop should be created.", func() {
 
 			By("creating a new GitOpsDeployment resource, that the GitOpsDeploymentSyncRun was missing from the previous step.")
+
 			gitopsDepl := &managedgitopsv1alpha1.GitOpsDeployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "dummy-deployment",
@@ -242,7 +263,10 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 				},
 			}
 
-			k8sClientOuter := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).Build()
+			k8sClientOuter := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(gitopsDepl, apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
 
 			// Simulate a GitOpsDeployment modified event
 			msg := eventlooptypes.EventLoopMessage{
@@ -276,13 +300,18 @@ var _ = Describe("Workspace Event Loop Test", Ordered, func() {
 			By("Read the events from the output channel, make sure they are the ones we expect, now that the gitopsdeploymentsyncrun in unorphaned")
 
 			deploymentModifiedMsg := <-tAELF.outputChannel
-			fmt.Println(deploymentModifiedMsg)
-			// TODO: Make sure this is the gitopsdeployment event from above
+
+			// Make sure this is the gitopsdeployment event from above
+			Expect(deploymentModifiedMsg).NotTo(BeNil())
+			Expect(deploymentModifiedMsg.Event).To(Equal(msg.Event))
+			Expect(deploymentModifiedMsg.MessageType).To(Equal(msg.MessageType))
 
 			syncRunModifiedMsg := <-tAELF.outputChannel
-			fmt.Println(syncRunModifiedMsg)
-			// TODO: Make sure this is the gitopsdeploymentsyncrun event from above
 
+			// Make sure this is the gitopsdeploymentsyncrun event from above
+			Expect(syncRunModifiedMsg).NotTo(BeNil())
+			Expect(syncRunModifiedMsg.Event.Request.Name).To(Equal(msgTemp.Event.Request.Name))
+			Expect(deploymentModifiedMsg.MessageType).To(Equal(msgTemp.MessageType))
 		})
 
 	})
@@ -303,8 +332,5 @@ func (ta *testApplicationEventLoopFactory) startApplicationEventQueueLoop(gitops
 
 	// Increase count by 1 if new application event loop is created
 	ta.numberOfEventLoopsCreated++
-
-	fmt.Println("mock startApplicationEventQueueLoop was called: "+gitopsDeplID, ta.numberOfEventLoopsCreated)
-
 	return ta.outputChannel
 }
