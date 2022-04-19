@@ -8,6 +8,7 @@ import (
 	dbutil "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
+	"github.com/redhat-appstudio/managed-gitops/backend/condition"
 	"github.com/redhat-appstudio/managed-gitops/backend/eventloop/eventlooptypes"
 	corev1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -154,6 +155,15 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleSyncRun
 
 	}
 
+	// Create a gitOpsDeploymentAdapter to plug any conditions
+	gitopsDeployment := &managedgitopsv1alpha1.GitOpsDeployment{}
+	gitopsDeploymentKey := client.ObjectKey{Namespace: syncRunCR.Namespace, Name: syncRunCR.Spec.GitopsDeploymentName}
+	conditionManager := condition.NewConditionManager()
+	adapter := newGitOpsDeploymentAdapter(gitopsDeployment, a.log, a.workspaceClient, conditionManager, ctx)
+	if clientErr := a.workspaceClient.Get(ctx, gitopsDeploymentKey, gitopsDeployment); clientErr != nil {
+		log.Error(err, "unable to retrieve gitopsDeployment.")
+	}
+
 	if syncRunCRExists && !dbEntryExists {
 		// Handle create:
 		// If the gitopsdeplsyncrun CR exists, but the database entry doesn't, then this is the first time we
@@ -180,6 +190,11 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleSyncRun
 		}
 		if err := dbQueries.CreateSyncOperation(ctx, syncOperation); err != nil {
 			log.Error(err, "unable to create sync operation in database")
+
+			if conditionErr := adapter.setGitOpsDeploymentCondition(managedgitopsv1alpha1.GitOpsDeploymentConditionErrorOccurred, managedgitopsv1alpha1.GitopsDeploymentReasonErrorOccurred, err); conditionErr != nil {
+				a.log.Error(conditionErr, "Failed while setting condition into.")
+			}
+
 			return false, err
 		}
 		createdResources = append(createdResources, syncOperation)
@@ -197,6 +212,10 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleSyncRun
 		}
 		if err := dbQueries.CreateAPICRToDatabaseMapping(ctx, &newApiCRToDBMapping); err != nil {
 			log.Error(err, "unable to create api to db mapping in database")
+
+			if conditionErr := adapter.setGitOpsDeploymentCondition(managedgitopsv1alpha1.GitOpsDeploymentConditionErrorOccurred, managedgitopsv1alpha1.GitopsDeploymentReasonErrorOccurred, err); conditionErr != nil {
+				a.log.Error(conditionErr, "Failed while setting condition into.")
+			}
 
 			// If we were unable to retrieve the client, delete the resources we created in the previous steps
 			dbutil.DisposeApplicationScopedResources(ctx, createdResources, dbQueries, log)
@@ -227,6 +246,10 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleSyncRun
 			dbutil.GetGitOpsEngineSingleInstanceNamespace(), dbQueries, operationClient, log)
 		if err != nil {
 			log.Error(err, "could not create operation", "namespace", dbutil.GetGitOpsEngineSingleInstanceNamespace())
+
+			if conditionErr := adapter.setGitOpsDeploymentCondition(managedgitopsv1alpha1.GitOpsDeploymentConditionErrorOccurred, managedgitopsv1alpha1.GitopsDeploymentReasonErrorOccurred, err); conditionErr != nil {
+				a.log.Error(conditionErr, "Failed while setting condition into.")
+			}
 
 			// If we were unable to create the operation, delete the resources we created in the previous steps
 			dbutil.DisposeApplicationScopedResources(ctx, createdResources, dbQueries, log)
@@ -292,6 +315,10 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleSyncRun
 			dbutil.GetGitOpsEngineSingleInstanceNamespace(), dbQueries, operationClient, log)
 		if err != nil {
 			log.Error(err, "could not create operation, when resource was deleted", "namespace", dbutil.GetGitOpsEngineSingleInstanceNamespace())
+
+			if conditionErr := adapter.setGitOpsDeploymentCondition(managedgitopsv1alpha1.GitOpsDeploymentConditionErrorOccurred, managedgitopsv1alpha1.GitopsDeploymentReasonErrorOccurred, err); conditionErr != nil {
+				a.log.Error(conditionErr, "Failed while setting condition into.")
+			}
 			return false, err
 		}
 

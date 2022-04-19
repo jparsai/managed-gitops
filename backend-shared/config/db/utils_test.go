@@ -1,9 +1,13 @@
 package db
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 func TestIsEmptyValues(t *testing.T) {
@@ -84,3 +88,52 @@ func TestIsEmptyValues(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("Utils Test", func() {
+	Context("Utils test", func() {
+		It("Should return error for Clusteruser_id", func() {
+			user := &ClusterUser{
+				Clusteruser_id: strings.Repeat("abc", 17),
+				User_name:      "user-name",
+			}
+			err := ValidateFieldLength(user)
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("Should return error for User_name", func() {
+			user := &ClusterUser{
+				Clusteruser_id: "user-id",
+				User_name:      strings.Repeat("abc", 86),
+			}
+			err := ValidateFieldLength(user)
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("Should pass", func() {
+			user := &ClusterUser{
+				Clusteruser_id: "user-id",
+				User_name:      "user-name",
+			}
+			err := ValidateFieldLength(user)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should return error for User_name", func() {
+			gitopsEngineCluster := &GitopsEngineCluster{
+				Gitopsenginecluster_id: "user-id",
+				SeqID:                  123,
+			}
+			err := ValidateFieldLength(gitopsEngineCluster)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should return error for User_name", func() {
+			gitopsEngineCluster := &GitopsEngineCluster{
+				Gitopsenginecluster_id: strings.Repeat("abc", 17),
+				SeqID:                  123,
+			}
+			err := ValidateFieldLength(gitopsEngineCluster)
+			Expect(err).NotTo(BeNil())
+		})
+	})
+})

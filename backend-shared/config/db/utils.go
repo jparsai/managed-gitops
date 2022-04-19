@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"strings"
 
@@ -167,4 +168,41 @@ func generateUuid() string {
 
 func isEmpty(str string) bool {
 	return len(strings.TrimSpace(str)) == 0
+}
+
+func ValidateFieldLength(obj interface{}) error {
+	valuesOfObject := reflect.ValueOf(obj).Elem()
+	typeOfObject := reflect.TypeOf(obj).Elem().Name()
+
+	for i := 0; i < valuesOfObject.NumField(); i++ {
+		fieldName := valuesOfObject.Type().Field(i).Name
+		fieldValue := valuesOfObject.FieldByName(fieldName)
+		fieldType := fieldValue.Type().Name()
+
+		if fieldType != "string" {
+			continue
+		}
+
+		maximumSize := GetConstantValue(convertSnakeCaseToCamelCase(typeOfObject + "_" + fieldName))
+
+		if len(fieldValue.String()) > maximumSize {
+			return fmt.Errorf("%v value exceeds maximum size: max: %d, actual: %d", fieldName, maximumSize, len(fieldValue.String()))
+		}
+	}
+	return nil
+}
+
+func convertSnakeCaseToCamelCase(fieldName string) string {
+	splitFieldName := strings.Split(fieldName, "_")
+	var fieldNameInCamelCase string
+
+	for i := 0; i < len(splitFieldName); i++ {
+		if splitFieldName[i] == "id" || splitFieldName[i] == "uid" {
+			fieldNameInCamelCase += strings.ToUpper(splitFieldName[i])
+		} else {
+			fieldNameInCamelCase += strings.Title(splitFieldName[i])
+		}
+	}
+
+	return fieldNameInCamelCase
 }

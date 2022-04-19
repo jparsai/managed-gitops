@@ -134,3 +134,10 @@ func TestTruncateVarchar(t *testing.T) {
 		})
 	}
 }
+
+func TestGetConstantValue(t *testing.T) {
+	for field, value := range dbFieldMap {
+		result := GetConstantValue(field)
+		assert.Equal(t, value, result)
+	}
+}
