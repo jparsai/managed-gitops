@@ -13,6 +13,7 @@ import (
 	"github.com/redhat-appstudio/managed-gitops/backend/condition"
 	"github.com/redhat-appstudio/managed-gitops/backend/eventloop/eventlooptypes"
 	"github.com/redhat-appstudio/managed-gitops/backend/util/fauxargocd"
+	"gopkg.in/yaml.v2"
 	goyaml "gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -660,6 +661,14 @@ func (a *applicationEventLoopRunner_Action) applicationEventRunner_handleUpdateD
 	gitopsDeployment.Status.Health.Message = applicationState.Message
 	gitopsDeployment.Status.Sync.Status = managedgitopsv1alpha1.SyncStatusCode(applicationState.Sync_Status)
 	gitopsDeployment.Status.Sync.Revision = applicationState.Revision
+
+	// Fetch the list of resources created by deployment from table and update local gitopsDeployment instance.
+	var resourceList []managedgitopsv1alpha1.ResourceStatus
+	err := yaml.Unmarshal([]byte(applicationState.Resources), &resourceList)
+	if err != nil {
+		a.log.Error(err, "Failed to unmarshal resource field.")
+	}
+	gitopsDeployment.Status.Resources = resourceList
 
 	// Update the actual object in Kubernetes
 	if err := a.workspaceClient.Status().Update(ctx, gitopsDeployment, &client.UpdateOptions{}); err != nil {

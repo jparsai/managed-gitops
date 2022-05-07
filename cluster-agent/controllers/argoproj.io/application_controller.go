@@ -28,6 +28,7 @@ import (
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	"github.com/redhat-appstudio/managed-gitops/cluster-agent/controllers"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -114,6 +115,15 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			applicationState.Revision = db.TruncateVarchar(app.Status.Sync.Revision, db.ApplicationStateRevisionLength)
 			sanitizeHealthAndStatus(applicationState)
 
+			// Get the list of resources created by deployment and convert it into a YAML string
+			resourceStr, err := yaml.Marshal(&app.Status.Resources)
+			if err != nil {
+				log.Error(err, "Error while Marshaling.")
+				applicationState.Resources = ""
+			} else {
+				applicationState.Resources = string(resourceStr)
+			}
+
 			if errCreate := r.Cache.CreateApplicationState(ctx, *applicationState); errCreate != nil {
 				log.Error(errCreate, "unexpected error on writing new application state")
 				return ctrl.Result{}, errCreate
@@ -133,6 +143,15 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	applicationState.Sync_Status = db.TruncateVarchar(string(app.Status.Sync.Status), db.ApplicationStateSyncStatusLength)
 	applicationState.Revision = db.TruncateVarchar(app.Status.Sync.Revision, db.ApplicationStateRevisionLength)
 	sanitizeHealthAndStatus(applicationState)
+
+	//string(app.Status.Resources)
+	resourceStr, err := yaml.Marshal(&app.Status.Resources)
+	if err != nil {
+		log.Error(err, "Error while Marshaling.")
+		applicationState.Resources = ""
+	} else {
+		applicationState.Resources = string(resourceStr)
+	}
 
 	if err := r.Cache.UpdateApplicationState(ctx, *applicationState); err != nil {
 		log.Error(err, "unexpected error on updating existing application state")

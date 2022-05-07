@@ -44,6 +44,7 @@ const (
 	ApplicationStateMessageLength                                           = 1024
 	ApplicationStateRevisionLength                                          = 1024
 	ApplicationStateSyncStatusLength                                        = 30
+	ApplicationStateResourcesLength                                         = 32768
 	DeploymentToApplicationMappingDeploymenttoapplicationmappingUIDIDLength = 48
 	DeploymentToApplicationMappingNameLength                                = 256
 	DeploymentToApplicationMappingNamespaceLength                           = 96
@@ -136,6 +137,7 @@ var DbFieldMap = map[string]int{
 	"ApplicationStateMessageLength":                                           ApplicationStateMessageLength,
 	"ApplicationStateRevisionLength":                                          ApplicationStateRevisionLength,
 	"ApplicationStateSyncStatusLength":                                        ApplicationStateSyncStatusLength,
+	"ApplicationStateResourcesLength":                                         ApplicationStateResourcesLength,
 	"DeploymentToApplicationMappingDeploymenttoapplicationmappingUIDIDLength": DeploymentToApplicationMappingDeploymenttoapplicationmappingUIDIDLength,
 	"DeploymentToApplicationMappingNameLength":                                DeploymentToApplicationMappingNameLength,
 	"DeploymentToApplicationMappingDeploymentNameLength":                      DeploymentToApplicationMappingNameLength,
