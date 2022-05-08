@@ -134,6 +134,7 @@ spec:
                     type: string
                 type: object
               resources:
+                description: List of Resource created by a deployment
                 items:
                   description: ResourceStatus holds the current sync and health status
                     of a resource

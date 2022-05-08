@@ -17,7 +17,10 @@ limitations under the License.
 package argoprojio
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"fmt"
 	"time"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -115,14 +118,8 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			applicationState.Revision = db.TruncateVarchar(app.Status.Sync.Revision, db.ApplicationStateRevisionLength)
 			sanitizeHealthAndStatus(applicationState)
 
-			// Get the list of resources created by deployment and convert it into a YAML string
-			resourceStr, err := yaml.Marshal(&app.Status.Resources)
-			if err != nil {
-				log.Error(err, "Error while Marshaling.")
-				applicationState.Resources = ""
-			} else {
-				applicationState.Resources = string(resourceStr)
-			}
+			// Get the list of resources created by deployment and convert it into a compressed YAML string.
+			applicationState.Resources, _ = CompressResourceData(app.Status.Resources)
 
 			if errCreate := r.Cache.CreateApplicationState(ctx, *applicationState); errCreate != nil {
 				log.Error(errCreate, "unexpected error on writing new application state")
@@ -144,14 +141,8 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	applicationState.Revision = db.TruncateVarchar(app.Status.Sync.Revision, db.ApplicationStateRevisionLength)
 	sanitizeHealthAndStatus(applicationState)
 
-	//string(app.Status.Resources)
-	resourceStr, err := yaml.Marshal(&app.Status.Resources)
-	if err != nil {
-		log.Error(err, "Error while Marshaling.")
-		applicationState.Resources = ""
-	} else {
-		applicationState.Resources = string(resourceStr)
-	}
+	// Get the list of resources created by deployment and convert it into a compressed YAML string.
+	applicationState.Resources, _ = CompressResourceData(app.Status.Resources)
 
 	if err := r.Cache.UpdateApplicationState(ctx, *applicationState); err != nil {
 		log.Error(err, "unexpected error on updating existing application state")
@@ -197,4 +188,34 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appv1.Application{}).
 		Complete(r)
+}
+
+// Convert ResourceStatus Array into String and then compress it into Byte Array​
+func CompressResourceData(resources []appv1.ResourceStatus) ([]byte, error) {
+	var byteArr []byte
+	var buffer bytes.Buffer
+
+	// Convert ResourceStatus object into String.
+	resourceStr, err := yaml.Marshal(&resources)
+	if err != nil {
+		return byteArr, fmt.Errorf("Unable to Marshal resource data. %v", err)
+	}
+
+	// Compress string data
+	gzipWriter, err := gzip.NewWriterLevel(&buffer, 1)
+	if err != nil {
+		return byteArr, fmt.Errorf("Unable to create Buffer writer. %v", err)
+	}
+
+	_, err = gzipWriter.Write([]byte(string(resourceStr)))
+
+	if err != nil {
+		return byteArr, fmt.Errorf("Unable to compress resource string. %v", err)
+	}
+
+	if err := gzipWriter.Close(); err != nil {
+		return byteArr, fmt.Errorf("Unable to close gzip writer connection. %v", err)
+	}
+
+	return buffer.Bytes(), nil
 }

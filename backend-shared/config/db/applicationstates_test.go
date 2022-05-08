@@ -33,11 +33,12 @@ var _ = Describe("ApplicationStates Tests", func() {
 			err = dbq.CreateApplication(ctx, application)
 			Expect(err).To(BeNil())
 
+			var byteArr []byte
 			applicationState := &db.ApplicationState{
 				Applicationstate_application_id: application.Application_id,
 				Health:                          "Progressing",
 				Sync_Status:                     "Unknown",
-				Resources:                       "[{a v1 b ns c Synced 123 false false}]",
+				Resources:                       byteArr,
 			}
 
 			err = dbq.CreateApplicationState(ctx, applicationState)

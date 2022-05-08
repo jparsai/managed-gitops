@@ -265,7 +265,7 @@ CREATE TABLE ApplicationState (
 	sync_status VARCHAR (30) NOT NULL,
 
 	-- resources field comes directly from Argo CD Application CR's .Status.Resources field
-	resources VARCHAR (32768)
+	resources bytea
 );
 
 -- Represents the relationship from GitOpsDeployment CR in the API namespace (workspace), to an Application table row.
