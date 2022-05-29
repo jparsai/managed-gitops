@@ -158,6 +158,7 @@ type ApplicationScopedQueries interface {
 	UpdateApplication(ctx context.Context, obj *Application) error
 	DeleteApplicationById(ctx context.Context, id string) (int, error)
 	CheckedDeleteApplicationById(ctx context.Context, id string, ownerId string) (int, error)
+	GetApplicationBatch(ctx context.Context, applications *[]Application, limit, offSet int) error
 
 	// TODO: GITOPSRVCE-19 - KCP support: All of the *ByAPINamespaceAndName database queries should only return items that are part of a specific KCP workspace.
 

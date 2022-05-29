@@ -108,6 +108,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	namespacesReconciler := argoprojiocontrollers.ApplicationReconciler{
+		DB:     applicationReconcileDB,
+		Client: mgr.GetClient(),
+	}
+
+	go namespacesReconciler.NamespaceReconcile()
+
 	if err = (&argoprojiocontrollers.ApplicationReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),

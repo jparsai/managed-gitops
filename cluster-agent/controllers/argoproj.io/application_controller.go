@@ -24,12 +24,14 @@ import (
 	"time"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	appv1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
+	"github.com/redhat-appstudio/managed-gitops/backend/util/fauxargocd"
 	"github.com/redhat-appstudio/managed-gitops/cluster-agent/controllers"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -161,6 +163,43 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	return ctrl.Result{}, nil
 
+}
+
+func (r *ApplicationReconciler) NamespaceReconcile() {
+	ticker := time.NewTicker(5 * time.Second)
+
+	for range ticker.C {
+		limit := 2
+		offSet := 0
+		ctx := context.Background()
+
+		for {
+			var applications []db.Application
+			var fauxApplication fauxargocd.FauxApplication
+			var fauxApplicationSyncPolicy fauxargocd.SyncPolicy
+			fauxApplication.Spec.SyncPolicy = &fauxApplicationSyncPolicy
+
+			err := r.DB.GetApplicationBatch(ctx, &applications, limit, offSet)
+			if err != nil {
+				break
+			}
+
+			if len(applications) == 0 {
+				break
+			}
+
+			for _, app := range applications {
+				err = yaml.Unmarshal([]byte(app.Spec_field), &fauxApplication)
+				namespacedName := types.NamespacedName{}
+				argoApp := appv1.Application{}
+				namespacedName.Name = fauxApplication.Name
+				namespacedName.Namespace = fauxApplication.Namespace
+				err := r.Get(ctx, namespacedName, &argoApp)
+			}
+
+			offSet += limit
+		}
+	}
 }
 
 func sanitizeHealthAndStatus(applicationState *db.ApplicationState) {
