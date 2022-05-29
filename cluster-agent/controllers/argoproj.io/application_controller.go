@@ -21,15 +21,20 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	appv1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
+	appEventLoop "github.com/redhat-appstudio/managed-gitops/backend/eventloop/application_event_loop"
+	"github.com/redhat-appstudio/managed-gitops/backend/util/fauxargocd"
 	"github.com/redhat-appstudio/managed-gitops/cluster-agent/controllers"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -163,6 +168,123 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 }
 
+var INITIAL_APP_ROW_OFFSET = 0
+var APP_ROW_BATCH_SIZE = 50             // Number of rows needs to be fetched in each batch.
+var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile workspace/namespace.
+
+// This function iterates through each Workspace/Namespace present in DB and ensures that the state of resources in Cluster is in Sync with DB.
+// Set to True if timer needs to stop after one iteration, for example in case of unit testing.
+func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
+
+	firstIteration := true
+	// Timer to trigger reconciler
+	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Minute)
+
+	// First Iteration starts immediately (Needed for test cases),
+	// then future iterations will trigger after interval configured for workspace/namespace reconciliation.
+	for ; true; <-ticker.C {
+		ctx := context.Background()
+		log := log.FromContext(ctx)
+		batchSize := APP_ROW_BATCH_SIZE
+		offSet := INITIAL_APP_ROW_OFFSET
+
+		// If its first iteration then no need to call for cleanup as no operations are created yet.
+		if !firstIteration {
+			CleanK8sOperations(ctx, r.DB, r.Client, log)
+		}
+
+		log.Info("Triggered Namespace Reconciler to keep Argo application in sync with DB.")
+
+		// Iterate until all entries of Application table are not processed.
+		for {
+			var listOfApplicationsFromDB []db.Application
+			var applicationFromDB fauxargocd.FauxApplication
+
+			// Fetch Application table entries in batches as configured above.​
+			if err := r.DB.GetApplicationBatch(ctx, &listOfApplicationsFromDB, batchSize, offSet); err != nil {
+				log.Error(err, "Error occurred in Namespace Reconciler while fetching batch from Offset: "+strconv.Itoa(offSet)+" to: "+strconv.Itoa(offSet+batchSize))
+				break
+			}
+
+			// Break the loop if no entries are left in table to be processed.
+			if len(listOfApplicationsFromDB) == 0 {
+				log.Info("All Application entries are processed by Namespace Reconciler.")
+				break
+			}
+
+			// Iterate over the received batch.
+			for _, applicationsFromDB := range listOfApplicationsFromDB {
+
+				if err := yaml.Unmarshal([]byte(applicationsFromDB.Spec_field), &applicationFromDB); err != nil {
+					log.Error(err, "Error occurred in Namespace Reconciler while unmarshalling application: "+applicationsFromDB.Application_id)
+					continue
+				}
+
+				// Fetch the Application object from k8s
+				applicationFromArgoCD := appv1.Application{}
+				namespacedName := types.NamespacedName{
+					Name:      applicationFromDB.Name,
+					Namespace: applicationFromDB.Namespace}
+
+				if err := r.Get(ctx, namespacedName, &applicationFromArgoCD); err != nil {
+					log.Error(err, "Error occurred in Namespace Reconciler while fetching application: "+applicationsFromDB.Application_id)
+					continue
+				}
+
+				// Compare ArgoCD application and Application entry from DB.
+				if compareApplications(applicationFromArgoCD, applicationFromDB, log) {
+					// No need to do anything, if both objects are same.
+					log.Info("Argo application is in Sync with DB, Application:" + applicationsFromDB.Application_id)
+					continue
+				} else {
+					log.Info("Argo application is not in Sync with DB, Updating ArgoCD App. Application:" + applicationsFromDB.Application_id)
+				}
+
+				// Get Special user created for internal use,
+				// because we need ClusterUser for creating Operation and we don't have one.
+				// Hence created a dummy Cluster User for internal purpose.
+				var specialClusterUser db.ClusterUser
+				if err := r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser); err != nil {
+					log.Error(err, "Error occurred in Namespace Reconciler while fetching clusterUser: "+applicationsFromDB.Application_id)
+					continue
+				}
+
+				// ArgoCD application and DB entry are not in Sync,
+				// ArgoCD should use the state of resources present in the database should
+				// Create Operation to inform ArgoCD to get in Sync with database entry.
+				dbOperationInput := db.Operation{
+					Instance_id:   applicationsFromDB.Engine_instance_inst_id,
+					Resource_id:   applicationsFromDB.Application_id,
+					Resource_type: db.OperationResourceType_Application,
+				}
+
+				_, _, err := appEventLoop.CreateOperation(ctx, false, dbOperationInput,
+					specialClusterUser.Clusteruser_id, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
+				if err != nil {
+					log.Error(err, "Namespace Reconciler is unable to create operation: "+dbOperationInput.ShortString())
+					continue
+				}
+
+				log.Info("Namespace Reconcile processed application : " + applicationsFromDB.Application_id)
+			}
+
+			// Skip processed entries in next iteration
+			offSet += batchSize
+		}
+
+		firstIteration = false
+
+		log.Info("NameSpace Reconciler finished an iteration at " + time.Now().String() +
+			". Next iteration will be triggered after " + strconv.Itoa(NAME_SPACE_RECONCILER_INTERVAL) + " Minutes")
+
+		// Stop timer and break reconciler loop.
+		if isDryRun {
+			ticker.Stop()
+			break
+		}
+	}
+}
+
 func sanitizeHealthAndStatus(applicationState *db.ApplicationState) {
 
 	if applicationState.Health == "" {
@@ -228,4 +350,107 @@ func CompressResourceData(resources []appv1.ResourceStatus) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+// Compare Application objects, since both objects are of different types we can not use == operator for comparison.
+func compareApplications(applicationFromArgoCD appv1.Application, applicationFromDB fauxargocd.FauxApplication, log logr.Logger) bool {
+
+	if applicationFromArgoCD.APIVersion != applicationFromDB.APIVersion {
+		log.Info("APIVersion field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Kind != applicationFromDB.Kind {
+		log.Info("Kind field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Name != applicationFromDB.Name {
+		log.Info("Name field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Namespace != applicationFromDB.Namespace {
+		log.Info("Namespace field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.RepoURL != applicationFromDB.Spec.Source.RepoURL {
+		log.Info("RepoURL field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.Path != applicationFromDB.Spec.Source.Path {
+		log.Info("Path field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.TargetRevision != applicationFromDB.Spec.Source.TargetRevision {
+		log.Info("TargetRevision field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Server != applicationFromDB.Spec.Destination.Server {
+		log.Info("Destination.Server field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Namespace != applicationFromDB.Spec.Destination.Namespace {
+		log.Info("Destination.Namespace field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Name != applicationFromDB.Spec.Destination.Name {
+		log.Info("Destination.Name field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.Project != applicationFromDB.Spec.Project {
+		log.Info("Project field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.Prune != applicationFromDB.Spec.SyncPolicy.Automated.Prune {
+		log.Info("Prune field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.SelfHeal != applicationFromDB.Spec.SyncPolicy.Automated.SelfHeal {
+		log.Info("SelfHeal field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.AllowEmpty != applicationFromDB.Spec.SyncPolicy.Automated.AllowEmpty {
+		log.Info("AllowEmpty field in ArgoCD and DB entry is not in Sync.")
+		return false
+	}
+	return true
+}
+
+func CleanK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client client.Client, log logr.Logger) {
+	listOfK8sOperation := v1alpha1.OperationList{}
+	err := client.List(ctx, &listOfK8sOperation)
+	if err != nil {
+		log.Error(err, "Unable to fetch list of k8s Operation from cluster.")
+		return
+	}
+
+	for _, k8sOperation := range listOfK8sOperation.Items {
+
+		// Skip if Operation was not created by NameSpace Reconciler.
+		if k8sOperation.Annotations["source"] != "periodic-cleanup" {
+			continue
+		}
+
+		// Fetch corresponding DB entry
+		dbOperation := db.Operation{
+			Operation_id: k8sOperation.Spec.OperationID,
+		}
+		if err := dbq.GetOperationById(ctx, &dbOperation); err != nil {
+			log.Error(err, "Unable to fetch DB Operation entry for "+string(k8sOperation.Spec.OperationID))
+			continue
+		}
+
+		if dbOperation.State != "Completed" {
+			log.Info("K8s Operation is not ready for cleanup : " + string(k8sOperation.UID) + " DbOperation: " + string(k8sOperation.Spec.OperationID))
+			continue
+		}
+
+		log.Info("Deleting Operation created by NameSpace Reconciler." + string(k8sOperation.UID))
+
+		// Clean the k8s operation now.
+		if err := appEventLoop.CleanupOperation(ctx, dbOperation, k8sOperation, cache.GetGitOpsEngineSingleInstanceNamespace(), dbq, client, log); err != nil {
+			log.Error(err, "Unable to Delete k8s Operation"+string(k8sOperation.UID)+" for DbOperation: "+string(k8sOperation.Spec.OperationID))
+		} else {
+			log.Info("Deleted k8s Operation: " + string(k8sOperation.UID) + " for DbOperation: " + string(k8sOperation.Spec.OperationID))
+		}
+	}
+	log.Info("Cleaned all Operations created by NameSpace Reconciler.")
 }
