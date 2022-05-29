@@ -271,7 +271,7 @@ type applicationEventLoopRunner_Action struct {
 }
 
 // cleanupOperation cleans up the database entry and (optionally) the CR, once an operation has concluded.
-func cleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation operation.Operation, operationNamespace string,
+func CleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation operation.Operation, operationNamespace string,
 	dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) error {
 
 	log = log.WithValues("operation", dbOperation.Operation_id, "namespace", operationNamespace)
@@ -299,7 +299,7 @@ func cleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperatio
 
 }
 
-func createOperation(ctx context.Context, waitForOperation bool, dbOperationParam db.Operation, clusterUserID string,
+func CreateOperation(ctx context.Context, waitForOperation bool, dbOperationParam db.Operation, clusterUserID string,
 	operationNamespace string, dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) (*operation.Operation, *db.Operation, error) {
 
 	var err error
@@ -332,6 +332,10 @@ func createOperation(ctx context.Context, waitForOperation bool, dbOperationPara
 		},
 	}
 
+	// Set annotation as an identifier for Operations created by NameSpace Reconciler.
+	if clusterUserID == "cluster-agent-application-sync-user" {
+		operation.Annotations = map[string]string{"source": "periodic-cleanup"}
+	}
 	log.Info("Creating K8s Operation CR", "operation", fmt.Sprintf("%v", operation.Spec.OperationID))
 
 	if err := gitopsEngineClient.Create(ctx, &operation, &client.CreateOptions{}); err != nil {
