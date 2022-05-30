@@ -34,6 +34,7 @@ import (
 	"github.com/redhat-appstudio/managed-gitops/backend/util/fauxargocd"
 	"github.com/redhat-appstudio/managed-gitops/cluster-agent/controllers"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -166,8 +167,8 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 var INITIAL_APP_ROW_OFFSET = 0
-var APP_ROW_BATCH_SIZE = 50             // Number of rows needs to be fetched in each batch.
-var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile workspace/namespace.
+var APP_ROW_BATCH_SIZE = 50            // Number of rows needs to be fetched in each batch.
+var NAME_SPACE_RECONCILER_INTERVAL = 5 //Interval in minutes to reconcile workspace/namespace.
 
 func (r *ApplicationReconciler) NamespaceReconcile() {
 
@@ -189,11 +190,13 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 			// Fetch Application table entries in batches configured above.
 			err := r.DB.GetApplicationBatch(ctx, &applications, batchSize, offSet)
 			if err != nil {
+				fmt.Println("Error occurred while fetching batch from Offset: ", offSet, "to: ", offSet+batchSize)
 				break
 			}
 
 			// Break the loop if no entries are left in table to be processed.
 			if len(applications) == 0 {
+				fmt.Println("All entries are processed.")
 				break
 			}
 
@@ -203,6 +206,7 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 				// Convert String to Object
 				err = yaml.Unmarshal([]byte(application.Spec_field), &fauxApplication)
 				if err != nil {
+					fmt.Println("Error occurred while unmarshalling application: ", application.Application_id, "err: ", err)
 					continue
 				}
 
@@ -217,8 +221,11 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 
 				err = r.Get(ctx, namespacedName, &argoApp)
 				if err != nil {
+					fmt.Println("Error occurred while fetching application: ", application.Application_id, "err: ", err)
 					continue
 				}
+				fmt.Println("\nargoApp === ", argoApp)
+				fmt.Println("\nnamespacedName === ", namespacedName)
 
 				dbOperationInput := db.Operation{
 					Instance_id:   application.Engine_instance_inst_id,
@@ -228,6 +235,27 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 
 				fmt.Println(dbOperationInput)
 				//eventLoop.CreateOperation()
+
+				//////////////////////////////////////////////////////////////////
+				// To get the ClusterUser
+
+				workspaceNamespace := corev1.Namespace{}
+				err := r.Get(ctx, types.NamespacedName{Namespace: namespacedName.Namespace, Name: namespacedName.Namespace}, &workspaceNamespace)
+				if err != nil {
+					fmt.Println("Error occurred while fetching workspace: ", application.Application_id, "err: ", err)
+					continue
+				}
+
+				fmt.Println("\nworkspaceNamespace === ", workspaceNamespace)
+
+				clusterUser := db.ClusterUser{User_name: string(workspaceNamespace.UID)}
+				err = r.DB.GetClusterUserByUsername(ctx, &clusterUser)
+				if err != nil {
+					fmt.Println("Error occurred while fetching ClusterUser for application: ", application.Application_id, "err: ", err)
+					continue
+				}
+
+				fmt.Println("\nclusterUser Error === ", err)
 			}
 
 			// Skip processed entries in next iteration
