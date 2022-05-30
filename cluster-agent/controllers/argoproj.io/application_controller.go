@@ -165,39 +165,73 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 }
 
-func (r *ApplicationReconciler) NamespaceReconcile() {
-	ticker := time.NewTicker(5 * time.Second)
+var INITIAL_APP_ROW_OFFSET = 0
+var APP_ROW_BATCH_SIZE = 50             // Number of rows needs to be fetched in each batch.
+var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile workspace/namespace.
 
+func (r *ApplicationReconciler) NamespaceReconcile() {
+
+	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Second)
+
+	// Iterate after interval configured for workspace/namespace reconciliation.
 	for range ticker.C {
-		limit := 2
-		offSet := 0
+		batchSize := APP_ROW_BATCH_SIZE
+		offSet := INITIAL_APP_ROW_OFFSET
 		ctx := context.Background()
 
+		// Iterate until all entries of Application table are not processed.
 		for {
 			var applications []db.Application
 			var fauxApplication fauxargocd.FauxApplication
 			var fauxApplicationSyncPolicy fauxargocd.SyncPolicy
 			fauxApplication.Spec.SyncPolicy = &fauxApplicationSyncPolicy
 
-			err := r.DB.GetApplicationBatch(ctx, &applications, limit, offSet)
+			// Fetch Application table entries in batches configured above.
+			err := r.DB.GetApplicationBatch(ctx, &applications, batchSize, offSet)
 			if err != nil {
 				break
 			}
 
+			// Break the loop if no entries are left in table to be processed.
 			if len(applications) == 0 {
 				break
 			}
 
-			for _, app := range applications {
-				err = yaml.Unmarshal([]byte(app.Spec_field), &fauxApplication)
-				namespacedName := types.NamespacedName{}
+			// Iterate over the received batch.
+			for _, application := range applications {
+
+				// Convert String to Object
+				err = yaml.Unmarshal([]byte(application.Spec_field), &fauxApplication)
+				if err != nil {
+					continue
+				}
+
+				fmt.Println("\napplication.Spec_field === ", application.Spec_field)
+				fmt.Println("\nfauxApplication.Spec.SyncPolicy === ", fauxApplication.Spec.SyncPolicy)
+
+				// Fetch the Application object from k8s
 				argoApp := appv1.Application{}
+				namespacedName := types.NamespacedName{}
 				namespacedName.Name = fauxApplication.Name
 				namespacedName.Namespace = fauxApplication.Namespace
-				err := r.Get(ctx, namespacedName, &argoApp)
+
+				err = r.Get(ctx, namespacedName, &argoApp)
+				if err != nil {
+					continue
+				}
+
+				dbOperationInput := db.Operation{
+					Instance_id:   application.Engine_instance_inst_id,
+					Resource_id:   application.Application_id,
+					Resource_type: db.OperationResourceType_SyncOperation,
+				}
+
+				fmt.Println(dbOperationInput)
+				//eventLoop.CreateOperation()
 			}
 
-			offSet += limit
+			// Skip processed entries in next iteration
+			offSet += batchSize
 		}
 	}
 }

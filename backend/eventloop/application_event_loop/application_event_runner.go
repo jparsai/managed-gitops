@@ -299,7 +299,7 @@ func cleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperatio
 
 }
 
-func createOperation(ctx context.Context, waitForOperation bool, dbOperationParam db.Operation, clusterUserID string,
+func CreateOperation(ctx context.Context, waitForOperation bool, dbOperationParam db.Operation, clusterUserID string,
 	operationNamespace string, dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) (*operation.Operation, *db.Operation, error) {
 
 	var err error
