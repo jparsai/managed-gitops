@@ -172,6 +172,7 @@ var NAME_SPACE_RECONCILER_INTERVAL = 5 //Interval in minutes to reconcile worksp
 
 func (r *ApplicationReconciler) NamespaceReconcile() {
 
+	// Timer to trigger reconciler
 	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Minute)
 
 	// Iterate after interval configured for workspace/namespace reconciliation.
@@ -181,84 +182,88 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 		ctx := context.Background()
 		log := log.FromContext(ctx)
 
+		log.Info("Triggered namespace reconcile to keep Argo application in sync with db.")
+
 		// Iterate until all entries of Application table are not processed.
 		for {
-			var applications []db.Application
-			var fauxApplication fauxargocd.FauxApplication
-			var fauxApplicationSyncPolicy fauxargocd.SyncPolicy
-			fauxApplication.Spec.SyncPolicy = &fauxApplicationSyncPolicy
+			var listOfApplicationsFromDB []db.Application
+			var applicationFromDB fauxargocd.FauxApplication
+			//var applicationFromDBSyncPolicy fauxargocd.SyncPolicy
+			//applicationFromDB.Spec.SyncPolicy = &applicationFromDBSyncPolicy
 
-			// Fetch Application table entries in batches configured above.
-			err := r.DB.GetApplicationBatch(ctx, &applications, batchSize, offSet)
+			// Fetch Application table entries in batches as configured above.​
+			err := r.DB.GetApplicationBatch(ctx, &listOfApplicationsFromDB, batchSize, offSet)
 			if err != nil {
-				fmt.Println("Error occurred while fetching batch from Offset: ", offSet, "to: ", offSet+batchSize)
+				log.Error(err, "Error occurred while fetching batch from Offset: ", offSet, "to: ", offSet+batchSize)
 				break
 			}
 
 			// Break the loop if no entries are left in table to be processed.
-			if len(applications) == 0 {
-				fmt.Println("All entries are processed.")
+			if len(listOfApplicationsFromDB) == 0 {
+				log.Info("All entries are processed.")
 				break
 			}
 
 			// Iterate over the received batch.
-			for _, application := range applications {
+			for _, applicationsFromDB := range listOfApplicationsFromDB {
 
 				// Convert String to Object
-				err = yaml.Unmarshal([]byte(application.Spec_field), &fauxApplication)
+				err = yaml.Unmarshal([]byte(applicationsFromDB.Spec_field), &applicationFromDB)
 				if err != nil {
-					fmt.Println("Error occurred while unmarshalling application: ", application.Application_id, "err: ", err)
+					log.Error(err, "Error occurred while unmarshalling application: ", applicationsFromDB.Application_id)
 					continue
 				}
 
 				// Fetch the Application object from k8s
-				argoApp := appv1.Application{}
-				namespacedName := types.NamespacedName{}
-				namespacedName.Name = fauxApplication.Name
-				namespacedName.Namespace = fauxApplication.Namespace
+				applicationFromArgoCD := appv1.Application{}
+				namespacedName := types.NamespacedName{
+					Name:      applicationFromDB.Name,
+					Namespace: applicationFromDB.Namespace}
 
-				err = r.Get(ctx, namespacedName, &argoApp)
+				err = r.Get(ctx, namespacedName, &applicationFromArgoCD)
 				if err != nil {
-					fmt.Println("Error occurred while fetching application: ", application.Application_id, "err: ", err)
+					log.Error(err, "Error occurred while fetching application: ", applicationsFromDB.Application_id)
 					continue
 				}
 
-				/*
-					/////////////
-					/////////////
-					Yet to implement ​logic to compare ArgoCD application and DB entry​
-					////////////
-					////////////
-				*/
+				// Compare ArgoCD application and Application entry from DB.
+				if compareApplications(applicationFromArgoCD, applicationFromDB) {
+					// No need to do anything, if both objects are same.
+					log.Info("Argo application: ", applicationsFromDB.Application_id, "is in Sync with DB.")
+					continue
+				}
 
 				// Get Special user created for internal use,
-				// because we need ClusterUser for creating Operation and we don't have one. Hence created a dummy Cluster User for internal purpose.
+				// because we need ClusterUser for creating Operation and we don't have one.
+				// Hence created a dummy Cluster User for internal purpose.
 				var specialClusterUser db.ClusterUser
-				r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser)
+				err = r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser)
+				if err != nil {
+					log.Error(err, "Error occurred while fetching clusterUser: ", applicationsFromDB.Application_id)
+					continue
+				}
 
 				// ArgoCD application and DB entry are not in Sync,
 				// ArgoCD should use the state of resources present in the database should
 				// Create Operation to inform ArgoCD to get in Sync with database entry.
 				dbOperationInput := db.Operation{
-					Instance_id:   application.Engine_instance_inst_id,
-					Resource_id:   application.Application_id,
+					Instance_id:   applicationsFromDB.Engine_instance_inst_id,
+					Resource_id:   applicationsFromDB.Application_id,
 					Resource_type: db.OperationResourceType_Application,
 				}
 
-				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, true, dbOperationInput, specialClusterUser.Clusteruser_id,
-					cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
+				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, true, dbOperationInput,
+					specialClusterUser.Clusteruser_id, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
+				if err != nil {
+					log.Error(err, "unable to create operation", "operation", dbOperationInput.ShortString())
+					continue
+				}
 
-				fmt.Println("err = ", err)
-				fmt.Println("k8sOperation = ", k8sOperation)
-				fmt.Println("dbOperation = ", dbOperation)
+				err = appEventLoop.CleanupOperation(ctx, *dbOperation, *k8sOperation, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
+				if err != nil {
+					log.Error(err, "unable to cleanup operation", "operation", dbOperationInput.ShortString())
+				}
 
-				/*
-					/////////////
-					/////////////
-					ArgoCD application is supposed to be in Sync with database.​
-					////////////
-					////////////
-				*/
 			}
 
 			// Skip processed entries in next iteration
@@ -332,4 +337,52 @@ func CompressResourceData(resources []appv1.ResourceStatus) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+// Compare Application objects, since both objects are of different types we can not use == operator for comparison.
+func compareApplications(applicationFromArgoCD appv1.Application, applicationFromDB fauxargocd.FauxApplication) bool {
+
+	if applicationFromArgoCD.APIVersion != applicationFromDB.APIVersion {
+		return false
+	}
+	if applicationFromArgoCD.Kind != applicationFromDB.Kind {
+		return false
+	}
+	if applicationFromArgoCD.Name != applicationFromDB.Name {
+		return false
+	}
+	if applicationFromArgoCD.Namespace != applicationFromDB.Namespace {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.RepoURL != applicationFromDB.Spec.Source.RepoURL {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.Path != applicationFromDB.Spec.Source.Path {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Source.TargetRevision != applicationFromDB.Spec.Source.TargetRevision {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Server != applicationFromDB.Spec.Destination.Server {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Namespace != applicationFromDB.Spec.Destination.Namespace {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Destination.Name != applicationFromDB.Spec.Destination.Name {
+		return false
+	}
+	if applicationFromArgoCD.Spec.Project != applicationFromDB.Spec.Project {
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.Prune != applicationFromDB.Spec.SyncPolicy.Automated.Prune {
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.SelfHeal != applicationFromDB.Spec.SyncPolicy.Automated.SelfHeal {
+		return false
+	}
+	if applicationFromArgoCD.Spec.SyncPolicy.Automated.AllowEmpty != applicationFromDB.Spec.SyncPolicy.Automated.AllowEmpty {
+		return false
+	}
+	return true
 }

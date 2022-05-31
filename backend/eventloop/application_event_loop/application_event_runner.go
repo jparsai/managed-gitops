@@ -271,7 +271,7 @@ type applicationEventLoopRunner_Action struct {
 }
 
 // cleanupOperation cleans up the database entry and (optionally) the CR, once an operation has concluded.
-func cleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation operation.Operation, operationNamespace string,
+func CleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation operation.Operation, operationNamespace string,
 	dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) error {
 
 	log = log.WithValues("operation", dbOperation.Operation_id, "namespace", operationNamespace)
