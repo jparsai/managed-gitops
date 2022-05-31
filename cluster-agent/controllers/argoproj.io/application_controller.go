@@ -31,10 +31,10 @@ import (
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
+	appEventLoop "github.com/redhat-appstudio/managed-gitops/backend/eventloop/application_event_loop"
 	"github.com/redhat-appstudio/managed-gitops/backend/util/fauxargocd"
 	"github.com/redhat-appstudio/managed-gitops/cluster-agent/controllers"
 	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -172,13 +172,14 @@ var NAME_SPACE_RECONCILER_INTERVAL = 5 //Interval in minutes to reconcile worksp
 
 func (r *ApplicationReconciler) NamespaceReconcile() {
 
-	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Second)
+	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Minute)
 
 	// Iterate after interval configured for workspace/namespace reconciliation.
 	for range ticker.C {
 		batchSize := APP_ROW_BATCH_SIZE
 		offSet := INITIAL_APP_ROW_OFFSET
 		ctx := context.Background()
+		log := log.FromContext(ctx)
 
 		// Iterate until all entries of Application table are not processed.
 		for {
@@ -210,9 +211,6 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 					continue
 				}
 
-				fmt.Println("\napplication.Spec_field === ", application.Spec_field)
-				fmt.Println("\nfauxApplication.Spec.SyncPolicy === ", fauxApplication.Spec.SyncPolicy)
-
 				// Fetch the Application object from k8s
 				argoApp := appv1.Application{}
 				namespacedName := types.NamespacedName{}
@@ -224,38 +222,43 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 					fmt.Println("Error occurred while fetching application: ", application.Application_id, "err: ", err)
 					continue
 				}
-				fmt.Println("\nargoApp === ", argoApp)
-				fmt.Println("\nnamespacedName === ", namespacedName)
 
+				/*
+					/////////////
+					/////////////
+					Yet to implement ​logic to compare ArgoCD application and DB entry​
+					////////////
+					////////////
+				*/
+
+				// Get Special user created for internal use,
+				// because we need ClusterUser for creating Operation and we don't have one. Hence created a dummy Cluster User for internal purpose.
+				var specialClusterUser db.ClusterUser
+				r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser)
+
+				// ArgoCD application and DB entry are not in Sync,
+				// ArgoCD should use the state of resources present in the database should
+				// Create Operation to inform ArgoCD to get in Sync with database entry.
 				dbOperationInput := db.Operation{
 					Instance_id:   application.Engine_instance_inst_id,
 					Resource_id:   application.Application_id,
-					Resource_type: db.OperationResourceType_SyncOperation,
+					Resource_type: db.OperationResourceType_Application,
 				}
 
-				fmt.Println(dbOperationInput)
-				//eventLoop.CreateOperation()
+				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, true, dbOperationInput, specialClusterUser.Clusteruser_id,
+					cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
 
-				//////////////////////////////////////////////////////////////////
-				// To get the ClusterUser
+				fmt.Println("err = ", err)
+				fmt.Println("k8sOperation = ", k8sOperation)
+				fmt.Println("dbOperation = ", dbOperation)
 
-				workspaceNamespace := corev1.Namespace{}
-				err := r.Get(ctx, types.NamespacedName{Namespace: namespacedName.Namespace, Name: namespacedName.Namespace}, &workspaceNamespace)
-				if err != nil {
-					fmt.Println("Error occurred while fetching workspace: ", application.Application_id, "err: ", err)
-					continue
-				}
-
-				fmt.Println("\nworkspaceNamespace === ", workspaceNamespace)
-
-				clusterUser := db.ClusterUser{User_name: string(workspaceNamespace.UID)}
-				err = r.DB.GetClusterUserByUsername(ctx, &clusterUser)
-				if err != nil {
-					fmt.Println("Error occurred while fetching ClusterUser for application: ", application.Application_id, "err: ", err)
-					continue
-				}
-
-				fmt.Println("\nclusterUser Error === ", err)
+				/*
+					/////////////
+					/////////////
+					ArgoCD application is supposed to be in Sync with database.​
+					////////////
+					////////////
+				*/
 			}
 
 			// Skip processed entries in next iteration

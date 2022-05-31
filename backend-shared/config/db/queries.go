@@ -83,6 +83,7 @@ type DatabaseQueries interface {
 	CheckedGetClusterCredentialsById(ctx context.Context, clusterCredentials *ClusterCredentials, ownerId string) error
 	GetClusterUserById(ctx context.Context, clusterUser *ClusterUser) error
 	GetClusterUserByUsername(ctx context.Context, clusterUser *ClusterUser) error
+	GetOrCreateSpecialClusterUser(ctx context.Context, clusterUser *ClusterUser) error
 	CheckedGetGitopsEngineClusterById(ctx context.Context, gitopsEngineCluster *GitopsEngineCluster, ownerId string) error
 	CheckedGetGitopsEngineInstanceById(ctx context.Context, engineInstanceParam *GitopsEngineInstance, ownerId string) error
 	CheckedGetManagedEnvironmentById(ctx context.Context, managedEnvironment *ManagedEnvironment, ownerId string) error

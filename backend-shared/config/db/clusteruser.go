@@ -145,3 +145,34 @@ func (dbq *PostgreSQLDatabaseQueries) GetClusterUserById(ctx context.Context, cl
 
 	return nil
 }
+
+func (dbq *PostgreSQLDatabaseQueries) GetOrCreateSpecialClusterUser(ctx context.Context, clusterUser *ClusterUser) error {
+	if dbq.dbConnection == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+
+	// Set the Special Cluster User details.
+	specialClusterUserName := "cluster-agent-application-sync-user"
+	var dbResults []ClusterUser
+
+	// Check if SpecialClusterUser already exists.
+	if err := dbq.dbConnection.Model(&dbResults).
+		Where("cu.clusteruser_id = ?", specialClusterUserName).
+		Context(ctx).
+		Select(); err != nil {
+		return fmt.Errorf("error on retrieving SpecialClusterUser: %v", err)
+	}
+
+	// If user already exists then return it, else create new.
+	if len(dbResults) != 0 {
+		*clusterUser = dbResults[0]
+	} else {
+		clusterUser.Clusteruser_id = specialClusterUserName
+		clusterUser.User_name = "cluster-agent-application-sync-user"
+
+		if _, err := dbq.dbConnection.Model(clusterUser).Context(ctx).Insert(); err != nil {
+			return fmt.Errorf("error on inserting SpecialClusterUser: %v", err)
+		}
+	}
+	return nil
+}

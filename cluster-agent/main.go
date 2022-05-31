@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -108,11 +109,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Get Special user created for internal use,
+	// because we need ClusterUser for creating Operation and we don't have one.
+	// Hence created a dummy Cluster User for internal purpose.
+	var speCialClusterUser db.ClusterUser
+	applicationReconcileDB.GetOrCreateSpecialClusterUser(context.Background(), &speCialClusterUser)
+
 	namespacesReconciler := argoprojiocontrollers.ApplicationReconciler{
 		DB:     applicationReconcileDB,
 		Client: mgr.GetClient(),
 	}
 
+	// Trigger goroutine for workSpace/NameSpace reconciler
 	go namespacesReconciler.NamespaceReconcile()
 
 	if err = (&argoprojiocontrollers.ApplicationReconciler{
