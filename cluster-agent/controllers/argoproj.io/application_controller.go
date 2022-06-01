@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -28,6 +29,7 @@ import (
 
 	appv1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
@@ -168,23 +170,25 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 var INITIAL_APP_ROW_OFFSET = 0
 var APP_ROW_BATCH_SIZE = 50             // Number of rows needs to be fetched in each batch.
-var NAME_SPACE_RECONCILER_INTERVAL = 10 //Interval in minutes to reconcile workspace/namespace.
+var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile workspace/namespace.
 
+// This function iterates through each Workspace/Namespace present in DB and ensures that the state of resources in Cluster is in Sync with DB.
 func (r *ApplicationReconciler) NamespaceReconcile() {
 
 	// Timer to trigger reconciler
-	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Second)
+	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Minute)
 
 	// Iterate after interval configured for workspace/namespace reconciliation.
 	for range ticker.C {
-		fmt.Println("##################################################################")
-		fmt.Println("##################################################################")
-		batchSize := APP_ROW_BATCH_SIZE
-		offSet := INITIAL_APP_ROW_OFFSET
+		var listOfDbOperation []*db.Operation
+		var listOfK8sOperation []*v1alpha1.Operation
+
 		ctx := context.Background()
 		log := log.FromContext(ctx)
+		batchSize := APP_ROW_BATCH_SIZE
+		offSet := INITIAL_APP_ROW_OFFSET
 
-		log.Info("Triggered namespace reconcile to keep Argo application in sync with db.")
+		log.Info("Triggered Namespace Reconciler to keep Argo application in sync with DB.")
 
 		// Iterate until all entries of Application table are not processed.
 		for {
@@ -196,13 +200,13 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 			// Fetch Application table entries in batches as configured above.​
 			err := r.DB.GetApplicationBatch(ctx, &listOfApplicationsFromDB, batchSize, offSet)
 			if err != nil {
-				log.Error(err, "Error occurred while fetching batch from Offset: ", offSet, "to: ", offSet+batchSize)
+				log.Error(err, "Error occurred in Namespace Reconciler while fetching batch from Offset: "+strconv.Itoa(offSet)+" to: "+strconv.Itoa(offSet+batchSize))
 				break
 			}
 
 			// Break the loop if no entries are left in table to be processed.
 			if len(listOfApplicationsFromDB) == 0 {
-				log.Info("All Application entries are processed by NamespaceReconcile.")
+				log.Info("All Application entries are processed by Namespace Reconciler.")
 				break
 			}
 
@@ -212,7 +216,7 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 				// Convert String to Object
 				err = yaml.Unmarshal([]byte(applicationsFromDB.Spec_field), &applicationFromDB)
 				if err != nil {
-					log.Error(err, "Error occurred while unmarshalling application: ", applicationsFromDB.Application_id)
+					log.Error(err, "Error occurred in Namespace Reconciler while unmarshalling application: "+applicationsFromDB.Application_id)
 					continue
 				}
 
@@ -224,17 +228,17 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 
 				err = r.Get(ctx, namespacedName, &applicationFromArgoCD)
 				if err != nil {
-					log.Error(err, "Error occurred while fetching application: ", applicationsFromDB.Application_id)
+					log.Error(err, "Error occurred in Namespace Reconciler while fetching application: "+applicationsFromDB.Application_id)
 					continue
 				}
 
 				// Compare ArgoCD application and Application entry from DB.
 				if compareApplications(applicationFromArgoCD, applicationFromDB, log) {
 					// No need to do anything, if both objects are same.
-					log.Info("Argo application: ", applicationsFromDB.Application_id, "is in Sync with DB.")
+					log.Info("Argo application is in Sync with DB, Application:" + applicationsFromDB.Application_id)
 					continue
 				} else {
-					log.Info("Argo application: ", applicationsFromDB.Application_id, "is not in Sync with DB, Updating ArgoCD App.")
+					log.Info("Argo application is not in Sync with DB, Updating ArgoCD App. Application:" + applicationsFromDB.Application_id)
 				}
 
 				// Get Special user created for internal use,
@@ -243,7 +247,7 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 				var specialClusterUser db.ClusterUser
 				err = r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser)
 				if err != nil {
-					log.Error(err, "Error occurred while fetching clusterUser: ", applicationsFromDB.Application_id)
+					log.Error(err, "Error occurred in Namespace Reconciler while fetching clusterUser: "+applicationsFromDB.Application_id)
 					continue
 				}
 
@@ -256,26 +260,40 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 					Resource_type: db.OperationResourceType_Application,
 				}
 
-				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, true, dbOperationInput,
+				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, false, dbOperationInput,
 					specialClusterUser.Clusteruser_id, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
 				if err != nil {
-					log.Error(err, "Unable to create operation", "operation", dbOperationInput.ShortString())
+					log.Error(err, "Namespace Reconciler is unable to create operation: "+dbOperationInput.ShortString())
 					continue
 				}
 
-				err = appEventLoop.CleanupOperation(ctx, *dbOperation, *k8sOperation, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
-				if err != nil {
-					log.Error(err, "Unable to cleanup operation", "operation", dbOperationInput.ShortString())
-				}
+				listOfDbOperation = append(listOfDbOperation, dbOperation)
+				listOfK8sOperation = append(listOfK8sOperation, k8sOperation)
 
-				log.Info("NamespaceReconcile processed application : ", applicationsFromDB.Application_id)
+				log.Info("Namespace Reconcile processed application : " + applicationsFromDB.Application_id)
 			}
 
 			// Skip processed entries in next iteration
 			offSet += batchSize
 		}
-		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-		fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
+		if len(listOfK8sOperation) > 0 {
+			log.Info("Starting to clean Operations created by NameSpace Reconciler.")
+
+			for i, K8sOp := range listOfK8sOperation {
+				err := appEventLoop.CleanupOperation(ctx, *listOfDbOperation[i], *K8sOp, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
+				if err != nil {
+					log.Error(err, "Unable to cleanup operation operation")
+				} else {
+					log.Info("Cleaned Operation")
+				}
+			}
+
+			log.Info("Cleaned all Operations created by NameSpace Reconciler.")
+		}
+
+		log.Info("NameSpace Reconciler finished an iteration at " + time.Now().String() +
+			". Next iteration will be triggered after" + strconv.Itoa(NAME_SPACE_RECONCILER_INTERVAL) + "Minutes")
 	}
 }
 
@@ -362,11 +380,11 @@ func compareApplications(applicationFromArgoCD appv1.Application, applicationFro
 		return false
 	}
 	if applicationFromArgoCD.Namespace != applicationFromDB.Namespace {
-		log.Info("RepoURL field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Namespace field in ArgoCD and DB entry is not in Sync.")
 		return false
 	}
 	if applicationFromArgoCD.Spec.Source.RepoURL != applicationFromDB.Spec.Source.RepoURL {
-		log.Info(" field in ArgoCD and DB entry is not in Sync.")
+		log.Info("RepoURL field in ArgoCD and DB entry is not in Sync.")
 		return false
 	}
 	if applicationFromArgoCD.Spec.Source.Path != applicationFromDB.Spec.Source.Path {
