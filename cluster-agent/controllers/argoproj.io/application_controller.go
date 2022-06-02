@@ -187,9 +187,9 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 		batchSize := APP_ROW_BATCH_SIZE
 		offSet := INITIAL_APP_ROW_OFFSET
 
-		// If its first iteration then no need to call for cleanup as no operations are created.
+		// If its first iteration then no need to call for cleanup as no operations are created yet.
 		if !firstIteration {
-			CleanOldK8sOperations(ctx, r.DB, r.Client, log)
+			CleanK8sOperations(ctx, r.DB, r.Client, log)
 		}
 
 		log.Info("Triggered Namespace Reconciler to keep Argo application in sync with DB.")
@@ -407,7 +407,7 @@ func compareApplications(applicationFromArgoCD appv1.Application, applicationFro
 	return true
 }
 
-func CleanOldK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client client.Client, log logr.Logger) {
+func CleanK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client client.Client, log logr.Logger) {
 	listOfK8sOperation := v1alpha1.OperationList{}
 	err := client.List(ctx, &listOfK8sOperation)
 	if err != nil {
@@ -422,8 +422,6 @@ func CleanOldK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client c
 			continue
 		}
 
-		log.Info("Deleting Operation created by NameSpace Reconciler." + string(k8sOperation.UID))
-
 		// Fetch corresponding DB entry
 		dbOperation := db.Operation{
 			Operation_id: k8sOperation.Spec.OperationID,
@@ -432,6 +430,13 @@ func CleanOldK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client c
 			log.Error(err, "Unable to fetch DB Operation entry for "+string(k8sOperation.Spec.OperationID))
 			continue
 		}
+
+		if dbOperation.State != "Completed" {
+			log.Info("K8s Operation is not ready for cleanup : " + string(k8sOperation.UID) + " DbOperation: " + string(k8sOperation.Spec.OperationID))
+			continue
+		}
+
+		log.Info("Deleting Operation created by NameSpace Reconciler." + string(k8sOperation.UID))
 
 		// Clean the k8s operation now.
 		if err := appEventLoop.CleanupOperation(ctx, dbOperation, k8sOperation, cache.GetGitOpsEngineSingleInstanceNamespace(), dbq, client, log); err != nil {
