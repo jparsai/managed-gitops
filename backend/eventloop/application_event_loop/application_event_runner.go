@@ -332,6 +332,10 @@ func CreateOperation(ctx context.Context, waitForOperation bool, dbOperationPara
 		},
 	}
 
+	// Set annotation as an identifier for Operations created by NameSpace Reconciler.
+	if clusterUserID == "cluster-agent-application-sync-user" {
+		operation.Annotations = map[string]string{"source": "periodic-cleanup"}
+	}
 	log.Info("Creating K8s Operation CR", "operation", fmt.Sprintf("%v", operation.Spec.OperationID))
 
 	if err := gitopsEngineClient.Create(ctx, &operation, &client.CreateOptions{}); err != nil {

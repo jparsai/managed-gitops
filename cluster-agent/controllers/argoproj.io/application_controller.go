@@ -29,6 +29,7 @@ import (
 
 	appv1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	cache "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db/util"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
@@ -174,6 +175,7 @@ var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile works
 // This function iterates through each Workspace/Namespace present in DB and ensures that the state of resources in Cluster is in Sync with DB.
 func (r *ApplicationReconciler) NamespaceReconcile() {
 
+	firstIteration := true
 	// Timer to trigger reconciler
 	ticker := time.NewTicker(time.Duration(NAME_SPACE_RECONCILER_INTERVAL) * time.Minute)
 
@@ -184,6 +186,11 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 		log := log.FromContext(ctx)
 		batchSize := APP_ROW_BATCH_SIZE
 		offSet := INITIAL_APP_ROW_OFFSET
+
+		// If its first iteration then no need to call for cleanup as no operations are created.
+		if !firstIteration {
+			CleanOldK8sOperations(ctx, r.DB, r.Client, log)
+		}
 
 		log.Info("Triggered Namespace Reconciler to keep Argo application in sync with DB.")
 
@@ -250,17 +257,12 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 					Resource_type: db.OperationResourceType_Application,
 				}
 
-				k8sOperation, dbOperation, err := appEventLoop.CreateOperation(ctx, false, dbOperationInput,
+				_, _, err := appEventLoop.CreateOperation(ctx, false, dbOperationInput,
 					specialClusterUser.Clusteruser_id, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
 				if err != nil {
 					log.Error(err, "Namespace Reconciler is unable to create operation: "+dbOperationInput.ShortString())
 					continue
 				}
-
-				fmt.Println("================================")
-				fmt.Println("k8sOperation ==", k8sOperation)
-				fmt.Println("\ndbOperation == ", dbOperation)
-				fmt.Println("================================")
 
 				log.Info("Namespace Reconcile processed application : " + applicationsFromDB.Application_id)
 			}
@@ -268,6 +270,8 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 			// Skip processed entries in next iteration
 			offSet += batchSize
 		}
+
+		firstIteration = false
 
 		log.Info("NameSpace Reconciler finished an iteration at " + time.Now().String() +
 			". Next iteration will be triggered after " + strconv.Itoa(NAME_SPACE_RECONCILER_INTERVAL) + " Minutes")
@@ -403,35 +407,38 @@ func compareApplications(applicationFromArgoCD appv1.Application, applicationFro
 	return true
 }
 
-/*func CleanOldK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client client.Client, log logr.Logger) {
-log.Info("Starting to clean Operations created by NameSpace Reconciler.")
+func CleanOldK8sOperations(ctx context.Context, dbq db.DatabaseQueries, client client.Client, log logr.Logger) {
+	listOfK8sOperation := v1alpha1.OperationList{}
+	err := client.List(ctx, &listOfK8sOperation)
+	if err != nil {
+		log.Error(err, "Unable to fetch list of k8s Operation from cluster.")
+		return
+	}
 
-list := v1alpha1.OperationList{}
-err := client.List(ctx, &list)
-if err != nil {
-	fmt.Println()
-}
-fmt.Println("1.....&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-fmt.Println("list = ", list)
-fmt.Println("2.....&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+	for _, k8sOperation := range listOfK8sOperation.Items {
 
-// Create K8s operation
-/*operation := v1alpha1.Operation{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "operation-" + dbOperation.Operation_id,
-		Namespace: operationNamespace,
-	},
-	Spec: operation.OperationSpec{
-		OperationID: dbOperation.Operation_id,
-	},
-}*/
+		// Skip if Operation was not created by NameSpace Reconciler.
+		if k8sOperation.Annotations["source"] != "periodic-cleanup" {
+			continue
+		}
 
-/*for i, K8sOp := range listOfK8sOperation {
-		if err := appEventLoop.CleanupOperation(ctx, *listOfDbOperation[i], *K8sOp, cache.GetGitOpsEngineSingleInstanceNamespace(), dbq, client, log); err != nil {
-			log.Error(err, "Unable to cleanup k8s Operation"+string(K8sOp.UID))
+		log.Info("Deleting Operation created by NameSpace Reconciler." + string(k8sOperation.UID))
+
+		// Fetch corresponding DB entry
+		dbOperation := db.Operation{
+			Operation_id: k8sOperation.Spec.OperationID,
+		}
+		if err := dbq.GetOperationById(ctx, &dbOperation); err != nil {
+			log.Error(err, "Unable to fetch DB Operation entry for "+string(k8sOperation.Spec.OperationID))
+			continue
+		}
+
+		// Clean the k8s operation now.
+		if err := appEventLoop.CleanupOperation(ctx, dbOperation, k8sOperation, cache.GetGitOpsEngineSingleInstanceNamespace(), dbq, client, log); err != nil {
+			log.Error(err, "Unable to Delete k8s Operation"+string(k8sOperation.UID)+" for DbOperation: "+string(k8sOperation.Spec.OperationID))
 		} else {
-			log.Info("Cleaned k8s Operation:" + string(K8sOp.UID))
+			log.Info("Deleted k8s Operation: " + string(k8sOperation.UID) + " for DbOperation: " + string(k8sOperation.Spec.OperationID))
 		}
 	}
 	log.Info("Cleaned all Operations created by NameSpace Reconciler.")
-}*/
+}

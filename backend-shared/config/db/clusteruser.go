@@ -168,7 +168,7 @@ func (dbq *PostgreSQLDatabaseQueries) GetOrCreateSpecialClusterUser(ctx context.
 		*clusterUser = dbResults[0]
 	} else {
 		clusterUser.Clusteruser_id = specialClusterUserName
-		clusterUser.User_name = "cluster-agent-application-sync-user"
+		clusterUser.User_name = specialClusterUserName
 
 		if _, err := dbq.dbConnection.Model(clusterUser).Context(ctx).Insert(); err != nil {
 			return fmt.Errorf("error on inserting SpecialClusterUser: %v", err)
