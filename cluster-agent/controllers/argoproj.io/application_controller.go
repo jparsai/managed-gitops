@@ -173,7 +173,8 @@ var APP_ROW_BATCH_SIZE = 50             // Number of rows needs to be fetched in
 var NAME_SPACE_RECONCILER_INTERVAL = 30 //Interval in minutes to reconcile workspace/namespace.
 
 // This function iterates through each Workspace/Namespace present in DB and ensures that the state of resources in Cluster is in Sync with DB.
-func (r *ApplicationReconciler) NamespaceReconcile() {
+// Set to True if timer needs to stop after one iteration, for example in case of unit testing.
+func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 
 	firstIteration := true
 	// Timer to trigger reconciler
@@ -275,6 +276,12 @@ func (r *ApplicationReconciler) NamespaceReconcile() {
 
 		log.Info("NameSpace Reconciler finished an iteration at " + time.Now().String() +
 			". Next iteration will be triggered after " + strconv.Itoa(NAME_SPACE_RECONCILER_INTERVAL) + " Minutes")
+
+		// Stop timer and break reconciler loop.
+		if isDryRun {
+			ticker.Stop()
+			break
+		}
 	}
 }
 

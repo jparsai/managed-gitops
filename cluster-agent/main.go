@@ -136,7 +136,7 @@ func main() {
 	}
 
 	// Trigger goroutine for workSpace/NameSpace reconciler
-	go namespacesReconciler.NamespaceReconcile()
+	go namespacesReconciler.NamespaceReconcile(false)
 	//==============================================
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
