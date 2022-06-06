@@ -260,7 +260,7 @@ func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 				}
 
 				// Compare ArgoCD application and Application entry from DB.
-				if compareApplications(applicationFromArgoCD, applicationFromDB, log) {
+				if CompareApplications(applicationFromArgoCD, applicationFromDB, log) {
 					// No need to do anything, if both objects are same.
 					log.Info("Argo application is in Sync with DB, Application:" + applicationRowFromDB.Application_id)
 					continue
@@ -381,7 +381,7 @@ func CompressResourceData(resources []appv1.ResourceStatus) ([]byte, error) {
 }
 
 // Compare Application objects, since both objects are of different types we can not use == operator for comparison.
-func compareApplications(applicationFromArgoCD appv1.Application, applicationFromDB fauxargocd.FauxApplication, log logr.Logger) bool {
+func CompareApplications(applicationFromArgoCD appv1.Application, applicationFromDB fauxargocd.FauxApplication, log logr.Logger) bool {
 
 	if applicationFromArgoCD.APIVersion != applicationFromDB.APIVersion {
 		log.Info("APIVersion field in ArgoCD and DB entry is not in Sync.")
