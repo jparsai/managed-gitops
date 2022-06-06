@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -213,10 +214,10 @@ func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 			}
 
 			// Iterate over the received batch.
-			for _, applicationsFromDB := range listOfApplicationsFromDB {
+			for _, applicationRowFromDB := range listOfApplicationsFromDB {
 
-				if err := yaml.Unmarshal([]byte(applicationsFromDB.Spec_field), &applicationFromDB); err != nil {
-					log.Error(err, "Error occurred in Namespace Reconciler while unmarshalling application: "+applicationsFromDB.Application_id)
+				if err := yaml.Unmarshal([]byte(applicationRowFromDB.Spec_field), &applicationFromDB); err != nil {
+					log.Error(err, "Error occurred in Namespace Reconciler while unmarshalling application: "+applicationRowFromDB.Application_id)
 					continue
 				}
 
@@ -226,18 +227,45 @@ func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 					Name:      applicationFromDB.Name,
 					Namespace: applicationFromDB.Namespace}
 
-				if err := r.Get(ctx, namespacedName, &applicationFromArgoCD); err != nil {
-					log.Error(err, "Error occurred in Namespace Reconciler while fetching application: "+applicationsFromDB.Application_id)
-					continue
+				err := r.Get(ctx, namespacedName, &applicationFromArgoCD)
+				if err != nil {
+					if strings.Contains(err.Error(), "not found") {
+						log.Info("Application " + applicationRowFromDB.Application_id + " not found in ArgoCD, probably user deleted it, " +
+							"but It still exists in DB, hence recreating application in ArgoCD.")
+
+						// Assign values to ArgoCD application object from DB object
+						applicationFromArgoCD.Kind, applicationFromArgoCD.APIVersion,
+							applicationFromArgoCD.Name, applicationFromArgoCD.Namespace,
+							applicationFromArgoCD.Spec.Source.RepoURL, applicationFromArgoCD.Spec.Source.Path,
+							applicationFromArgoCD.Spec.Source.TargetRevision = applicationFromDB.Kind,
+							applicationFromDB.APIVersion, applicationFromDB.Name,
+							applicationFromDB.Namespace, applicationFromDB.Spec.Source.RepoURL,
+							applicationFromDB.Spec.Source.Path, applicationFromDB.Spec.Source.TargetRevision
+
+						if applicationFromDB.Spec.SyncPolicy != nil {
+							applicationFromArgoCD.Spec.SyncPolicy = &appv1.SyncPolicy{
+								Automated: &appv1.SyncPolicyAutomated{Prune: applicationFromDB.Spec.SyncPolicy.Automated.Prune},
+							}
+						}
+
+						// Recreate ArgoCD Application
+						if err := r.Create(ctx, &applicationFromArgoCD); err != nil {
+							log.Error(err, "Namespace Reconciler failed to create application in ArgoCD.")
+							continue
+						}
+					} else {
+						log.Error(err, "Error occurred in Namespace Reconciler while fetching application from cluster: "+applicationRowFromDB.Application_id)
+						continue
+					}
 				}
 
 				// Compare ArgoCD application and Application entry from DB.
 				if compareApplications(applicationFromArgoCD, applicationFromDB, log) {
 					// No need to do anything, if both objects are same.
-					log.Info("Argo application is in Sync with DB, Application:" + applicationsFromDB.Application_id)
+					log.Info("Argo application is in Sync with DB, Application:" + applicationRowFromDB.Application_id)
 					continue
 				} else {
-					log.Info("Argo application is not in Sync with DB, Updating ArgoCD App. Application:" + applicationsFromDB.Application_id)
+					log.Info("Argo application is not in Sync with DB, Updating ArgoCD App. Application:" + applicationRowFromDB.Application_id)
 				}
 
 				// Get Special user created for internal use,
@@ -245,7 +273,7 @@ func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 				// Hence created a dummy Cluster User for internal purpose.
 				var specialClusterUser db.ClusterUser
 				if err := r.DB.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser); err != nil {
-					log.Error(err, "Error occurred in Namespace Reconciler while fetching clusterUser: "+applicationsFromDB.Application_id)
+					log.Error(err, "Error occurred in Namespace Reconciler while fetching clusterUser: "+applicationRowFromDB.Application_id)
 					continue
 				}
 
@@ -253,19 +281,19 @@ func (r *ApplicationReconciler) NamespaceReconcile(isDryRun bool) {
 				// ArgoCD should use the state of resources present in the database should
 				// Create Operation to inform ArgoCD to get in Sync with database entry.
 				dbOperationInput := db.Operation{
-					Instance_id:   applicationsFromDB.Engine_instance_inst_id,
-					Resource_id:   applicationsFromDB.Application_id,
+					Instance_id:   applicationRowFromDB.Engine_instance_inst_id,
+					Resource_id:   applicationRowFromDB.Application_id,
 					Resource_type: db.OperationResourceType_Application,
 				}
 
-				_, _, err := appEventLoop.CreateOperation(ctx, false, dbOperationInput,
+				_, _, err = appEventLoop.CreateOperation(ctx, false, dbOperationInput,
 					specialClusterUser.Clusteruser_id, cache.GetGitOpsEngineSingleInstanceNamespace(), r.DB, r.Client, log)
 				if err != nil {
 					log.Error(err, "Namespace Reconciler is unable to create operation: "+dbOperationInput.ShortString())
 					continue
 				}
 
-				log.Info("Namespace Reconcile processed application : " + applicationsFromDB.Application_id)
+				log.Info("Namespace Reconcile processed application : " + applicationRowFromDB.Application_id)
 			}
 
 			// Skip processed entries in next iteration
@@ -357,46 +385,57 @@ func compareApplications(applicationFromArgoCD appv1.Application, applicationFro
 
 	if applicationFromArgoCD.APIVersion != applicationFromDB.APIVersion {
 		log.Info("APIVersion field in ArgoCD and DB entry is not in Sync.")
+		log.Info("APIVersion:= ArgoCD: " + applicationFromArgoCD.APIVersion + "; DB: " + applicationFromDB.APIVersion)
 		return false
 	}
 	if applicationFromArgoCD.Kind != applicationFromDB.Kind {
 		log.Info("Kind field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Kind:= ArgoCD: " + applicationFromArgoCD.Kind + "; DB: " + applicationFromDB.Kind)
 		return false
 	}
 	if applicationFromArgoCD.Name != applicationFromDB.Name {
 		log.Info("Name field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Name:= ArgoCD: " + applicationFromArgoCD.Name + "; DB: " + applicationFromDB.Name)
 		return false
 	}
 	if applicationFromArgoCD.Namespace != applicationFromDB.Namespace {
 		log.Info("Namespace field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Namespace:= ArgoCD: " + applicationFromArgoCD.Namespace + "; DB: " + applicationFromDB.Namespace)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Source.RepoURL != applicationFromDB.Spec.Source.RepoURL {
 		log.Info("RepoURL field in ArgoCD and DB entry is not in Sync.")
+		log.Info("RepoURL:= ArgoCD: " + applicationFromArgoCD.Spec.Source.RepoURL + "; DB: " + applicationFromDB.Spec.Source.RepoURL)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Source.Path != applicationFromDB.Spec.Source.Path {
 		log.Info("Path field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Path:= ArgoCD: " + applicationFromArgoCD.Spec.Source.Path + "; DB: " + applicationFromDB.Spec.Source.Path)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Source.TargetRevision != applicationFromDB.Spec.Source.TargetRevision {
 		log.Info("TargetRevision field in ArgoCD and DB entry is not in Sync.")
+		log.Info("TargetRevision:= ArgoCD: " + applicationFromArgoCD.Spec.Source.TargetRevision + "; DB: " + applicationFromDB.Spec.Source.TargetRevision)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Destination.Server != applicationFromDB.Spec.Destination.Server {
 		log.Info("Destination.Server field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Destination.Server:= ArgoCD: " + applicationFromArgoCD.Spec.Destination.Server + "; DB: " + applicationFromDB.Spec.Destination.Server)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Destination.Namespace != applicationFromDB.Spec.Destination.Namespace {
 		log.Info("Destination.Namespace field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Destination.Namespace:= ArgoCD: " + applicationFromArgoCD.Spec.Destination.Namespace + "; DB: " + applicationFromDB.Spec.Destination.Namespace)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Destination.Name != applicationFromDB.Spec.Destination.Name {
 		log.Info("Destination.Name field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Destination.Name:= ArgoCD: " + applicationFromArgoCD.Spec.Destination.Name + "; DB: " + applicationFromDB.Spec.Destination.Name)
 		return false
 	}
 	if applicationFromArgoCD.Spec.Project != applicationFromDB.Spec.Project {
 		log.Info("Project field in ArgoCD and DB entry is not in Sync.")
+		log.Info("Project:= ArgoCD: " + applicationFromArgoCD.Spec.Project + "; DB: " + applicationFromDB.Spec.Project)
 		return false
 	}
 	if applicationFromArgoCD.Spec.SyncPolicy.Automated.Prune != applicationFromDB.Spec.SyncPolicy.Automated.Prune {
