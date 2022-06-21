@@ -22,6 +22,7 @@ import (
 	"reflect"
 
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
+	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	apibackend "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,21 +48,26 @@ type ApplicationSnapshotEnvironmentBindingReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
-func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+/*func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	fmt.Println("ApplicationSnapshotEventBinding event: ", req)
 
 	return ctrl.Result{}, nil
-}
+}*/
 
 // Proof-of-concept Reconcile. Comment out the above Reconcile, and rename this to Reconcile, when starting working on this.
-func (r *ApplicationSnapshotEnvironmentBindingReconciler) ReconcilePOC(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	log := log.FromContext(ctx).WithValues("name", req.Name, "namespace", req.Namespace)
+	defer log.V(sharedutil.LogLevel_Debug).Info("Application Reconcile() complete.")
+
 	binding := &appstudioshared.ApplicationSnapshotEnvironmentBinding{}
 
 	if err := r.Client.Get(ctx, req.NamespacedName, binding); err != nil {
 		// Binding doesn't exist: it was deleted.
 		// Owner refs will ensure the GitOpsDeployments are deleted, so no work to do.
+		log.Error(err, "Error occurred while retrieving Binding for '"+req.NamespacedName.String()+"'")
 		return ctrl.Result{}, nil
 	}
 
@@ -88,22 +94,20 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) ReconcilePOC(ctx conte
 	}
 
 	statusField := []appstudioshared.BindingStatusGitOpsDeployment{}
-
 	var firstErr error
 	// For each deployment, check if it exists, and if it has the expected content.
 	// - If not, create/update it.
-	for _, expectedGitOpsDeployment := range expectedDeployments {
-
+	for i, expectedGitOpsDeployment := range expectedDeployments {
 		if err := processExpectedGitOpsDeployment(ctx, expectedGitOpsDeployment, *binding, r.Client); err != nil {
-
 			if firstErr != nil {
+				log.Error(err, "Error occurred while processing expected GitOpsDeployment for Binding '"+binding.Name)
 				firstErr = err
 				continue
 			}
 		} else {
 			// No error: add to status
 			statusField = append(statusField, appstudioshared.BindingStatusGitOpsDeployment{
-				ComponentName:    "", // GITOPSRVCE-156: TODO: use the actual component name
+				ComponentName:    binding.Spec.Components[i].Name,
 				GitOpsDeployment: expectedGitOpsDeployment.Name,
 			})
 		}
@@ -112,13 +116,14 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) ReconcilePOC(ctx conte
 	// Update the status field with statusField vars (even if an error occurred)
 	binding.Status.GitOpsDeployments = statusField
 	if err := r.Client.Status().Update(ctx, binding); err != nil {
+		log.Error(err, "unable to update gitopsdeployments status for Binding "+binding.Name)
 		return ctrl.Result{}, fmt.Errorf("unable to update gitopsdeployments status: %v", err)
 	}
 
 	if firstErr != nil {
+		log.Error(firstErr, "unable to process expected GitOpsDeployment for Binding "+binding.Name)
 		return ctrl.Result{}, fmt.Errorf("unable to process expected GitOpsDeployment: %v", firstErr)
 	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -126,16 +131,18 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) ReconcilePOC(ctx conte
 func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployment apibackend.GitOpsDeployment,
 	binding appstudioshared.ApplicationSnapshotEnvironmentBinding, k8sClient client.Client) error {
 
+	log := log.FromContext(ctx)
 	actualGitOpsDeployment := apibackend.GitOpsDeployment{}
 
 	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&expectedGitopsDeployment), &actualGitOpsDeployment); err != nil {
-
 		// A) If the GitOpsDeployment doesn't exist, create it
 		if !apierr.IsNotFound(err) {
+			log.Error(err, "unable to retrieve gitopsdeployment "+expectedGitopsDeployment.Name)
 			return fmt.Errorf("unable to retrieve gitopsdeployment '%s': %v", expectedGitopsDeployment.Name, err)
 		}
 
 		if err := k8sClient.Create(ctx, &expectedGitopsDeployment); err != nil {
+			log.Error(err, "unexpected error while retrieve gitopsdeployment "+expectedGitopsDeployment.Name)
 			return err
 		}
 
@@ -143,9 +150,9 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 	}
 
 	// GitOpsDeployment already exists, so compare it with what we expect
-
 	if reflect.DeepEqual(expectedGitopsDeployment.Spec, actualGitOpsDeployment) {
 		// B) The GitOpsDeployment is exactly as expected, so return
+		log.V(sharedutil.LogLevel_Debug).Info("GitOpsDeployment already exists.")
 		return nil
 	}
 
@@ -153,6 +160,7 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 	actualGitOpsDeployment.Spec = expectedGitopsDeployment.Spec
 
 	if err := k8sClient.Update(ctx, &actualGitOpsDeployment); err != nil {
+		log.Error(err, "unable to update "+actualGitOpsDeployment.Name)
 		return fmt.Errorf("unable to update '%s', %v", actualGitOpsDeployment.Name, err)
 	}
 
@@ -166,7 +174,12 @@ func generateExpectedGitOpsDeployment(component appstudioshared.ComponentStatus,
 			Name:      binding.Name + "-" + binding.Spec.Application + "-" + binding.Spec.Environment + "-" + component.Name,
 			Namespace: binding.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.GetControllerOf(&binding),
+				{
+					APIVersion: binding.APIVersion,
+					Kind:       binding.Kind,
+					Name:       binding.Name,
+					UID:        binding.UID,
+				},
 			},
 		},
 		Spec: apibackend.GitOpsDeploymentSpec{
