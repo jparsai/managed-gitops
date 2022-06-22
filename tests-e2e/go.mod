@@ -8,7 +8,7 @@ require (
 	github.com/redhat-appstudio/managed-gitops/backend v0.0.0
 	github.com/redhat-appstudio/managed-gitops/backend-shared v0.0.0
 	k8s.io/apimachinery v0.23.5
-	k8s.io/client-go v0.23.1
+	k8s.io/client-go v0.23.3
 	sigs.k8s.io/controller-runtime v0.11.0
 )
 
@@ -18,7 +18,6 @@ require (
 	github.com/go-pg/pg/v10 v10.10.6 // indirect
 	github.com/go-pg/zerochecker v0.2.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.3.0 // indirect
-	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/redhat-appstudio/managed-gitops/appstudio-shared v0.0.0 // indirect
@@ -57,7 +56,7 @@ require (
 	github.com/go-git/gcfg v1.5.0 // indirect
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
-	github.com/go-logr/logr v1.2.2 // indirect
+	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -107,7 +106,7 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
-	golang.org/x/crypto v0.0.0-20220313003712-b769efc7c000 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20220420153159-1850ba15e1be // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
@@ -120,8 +119,8 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220207185906-7721543eae58 // indirect
-	google.golang.org/grpc v1.44.0 // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
+	google.golang.org/grpc v1.45.0 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
