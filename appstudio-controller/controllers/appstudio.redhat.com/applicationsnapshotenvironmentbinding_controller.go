@@ -150,7 +150,7 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 	}
 
 	// GitOpsDeployment already exists, so compare it with what we expect
-	if reflect.DeepEqual(expectedGitopsDeployment.Spec, actualGitOpsDeployment) {
+	if reflect.DeepEqual(expectedGitopsDeployment.Spec, actualGitOpsDeployment.Spec) {
 		// B) The GitOpsDeployment is exactly as expected, so return
 		log.V(sharedutil.LogLevel_Debug).Info("GitOpsDeployment already exists.")
 		return nil
@@ -170,6 +170,10 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 func generateExpectedGitOpsDeployment(component appstudioshared.ComponentStatus, binding appstudioshared.ApplicationSnapshotEnvironmentBinding) apibackend.GitOpsDeployment {
 
 	res := apibackend.GitOpsDeployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "managed-gitops.redhat.com/v1alpha1",
+			Kind:       "GitOpsDeployment",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      binding.Name + "-" + binding.Spec.Application + "-" + binding.Spec.Environment + "-" + component.Name,
 			Namespace: binding.Namespace,
