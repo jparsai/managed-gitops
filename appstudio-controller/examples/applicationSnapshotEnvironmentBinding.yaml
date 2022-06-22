@@ -16,11 +16,13 @@ spec:
           - name: My_STG_ENV
             value: "200"
         replicas: 3
-      gitopsRepository:
-        url: "https://github.com/redhat-appstudio/gitops-repository-template"
-        branch: main
-        path: components/componentA/overlays/staging
 status:
   gitopsDeployments:
     - componentName: component-a
       gitopsDeployment: new-demo-app-deployment
+  components:
+    - name: component-a
+      gitopsRepository: 
+        url: "https://github.com/redhat-appstudio/gitops-repository-template"
+        branch: main
+        path: components/componentA/overlays/staging
