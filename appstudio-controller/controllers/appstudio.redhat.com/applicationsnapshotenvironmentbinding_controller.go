@@ -94,11 +94,14 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.
 	}
 
 	statusField := []appstudioshared.BindingStatusGitOpsDeployment{}
+
 	var firstErr error
 	// For each deployment, check if it exists, and if it has the expected content.
 	// - If not, create/update it.
 	for i, expectedGitOpsDeployment := range expectedDeployments {
+
 		if err := processExpectedGitOpsDeployment(ctx, expectedGitOpsDeployment, *binding, r.Client); err != nil {
+
 			if firstErr != nil {
 				log.Error(err, "Error occurred while processing expected GitOpsDeployment for Binding '"+binding.Name)
 				firstErr = err
@@ -124,6 +127,7 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.
 		log.Error(firstErr, "unable to process expected GitOpsDeployment for Binding "+binding.Name)
 		return ctrl.Result{}, fmt.Errorf("unable to process expected GitOpsDeployment: %v", firstErr)
 	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -135,6 +139,7 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 	actualGitOpsDeployment := apibackend.GitOpsDeployment{}
 
 	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&expectedGitopsDeployment), &actualGitOpsDeployment); err != nil {
+
 		// A) If the GitOpsDeployment doesn't exist, create it
 		if !apierr.IsNotFound(err) {
 			log.Error(err, "unable to retrieve gitopsdeployment "+expectedGitopsDeployment.Name)

@@ -75,6 +75,13 @@ var _ = Describe("Application Snapshot Environment Binding Reconciler Tests", fu
 								},
 								Replicas: 3,
 							},
+						},
+					},
+				},
+				Status: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{
+					Components: []appstudiosharedv1.ComponentStatus{
+						{
+							Name: "component-a",
 							GitOpsRepository: appstudiosharedv1.BindingComponentGitOpsRepository{
 								URL:    "https://github.com/redhat-appstudio/gitops-repository-template",
 								Branch: "main",
@@ -175,8 +182,9 @@ var _ = Describe("Application Snapshot Environment Binding Reconciler Tests", fu
 			gitopsDeployment := &apibackend.GitOpsDeployment{}
 			err = bindingReconciler.Get(ctx, gitopsDeploymentKey, gitopsDeployment)
 			Expect(err).To(BeNil())
+
 			// GitOpsDeployment object spec should be same as Binding Component.
-			Expect(gitopsDeployment.Spec.Source.Path).To(Equal(binding.Spec.Components[0].GitOpsRepository.Path))
+			Expect(gitopsDeployment.Spec.Source.Path).To(Equal(binding.Status.Components[0].GitOpsRepository.Path))
 
 			// Update GitOpsDeploymentObject in cluster.
 			gitopsDeployment.Spec.Source.Path = "components/componentA/overlays/dev"
@@ -192,7 +200,7 @@ var _ = Describe("Application Snapshot Environment Binding Reconciler Tests", fu
 			Expect(err).To(BeNil())
 
 			// Reconciler should revert GitOpsDeployment object, so it will be same as old object
-			Expect(gitopsDeployment.Spec.Source.Path).To(Equal(binding.Spec.Components[0].GitOpsRepository.Path))
+			Expect(gitopsDeployment.Spec.Source.Path).To(Equal(binding.Status.Components[0].GitOpsRepository.Path))
 		})
 
 		It("Should use short name for GitOpsDeployment object.", func() {
@@ -215,6 +223,7 @@ var _ = Describe("Application Snapshot Environment Binding Reconciler Tests", fu
 			Expect(err).To(BeNil())
 			Expect(len(binding.Status.GitOpsDeployments)).NotTo(Equal(0))
 			Expect(binding.Status.GitOpsDeployments[0].ComponentName).To(Equal("component-a"))
+
 			// GitOpsDeployment should have short name
 			Expect(binding.Status.GitOpsDeployments[0].GitOpsDeployment).
 				To(Equal(binding.Name + "-" + binding.Spec.Components[0].Name))
