@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	appstudiosharedv1 "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	operation "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
 
@@ -201,6 +202,11 @@ func GetKubeClient() (client.Client, error) {
 	}
 
 	err = apps.AddToScheme(scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	err = appstudiosharedv1.AddToScheme(scheme)
 	if err != nil {
 		return nil, err
 	}
