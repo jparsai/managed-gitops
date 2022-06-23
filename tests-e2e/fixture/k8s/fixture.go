@@ -11,7 +11,6 @@ import (
 
 	matcher "github.com/onsi/gomega/types"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
-	typed "k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -101,23 +100,6 @@ func Delete(obj client.Object) error {
 	// fail
 	return fmt.Errorf("'%s' still exists", obj.GetName())
 
-}
-
-func Get(obj client.Object) error {
-	k8sClient, err := fixture.GetKubeClient()
-	if err != nil {
-		return err
-	}
-
-	ns := typed.NamespacedName{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}
-	if err = k8sClient.Get(context.Background(), ns, obj); err != nil {
-		fmt.Println(K8sClientError, "Error on Get : ", err)
-		return err
-	}
-	return nil
 }
 
 func UpdateStatus(obj client.Object) error {

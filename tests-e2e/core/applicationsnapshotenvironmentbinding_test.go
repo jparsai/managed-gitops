@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture"
@@ -17,6 +17,7 @@ import (
 var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler E2E tests", func() {
 
 	Context("Testing ApplicationSnapshotEnvironmentBinding Reconciler.", func() {
+
 		It("should update status of Binding.", func() {
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
 
@@ -42,9 +43,10 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler E2E tests", f
 					{
 						Name: "component-a",
 						GitOpsRepository: appstudiosharedv1.BindingComponentGitOpsRepository{
-							URL:    "https://github.com/redhat-appstudio/gitops-repository-template",
-							Branch: "main",
-							Path:   "components/componentA/overlays/staging",
+							URL:                "https://github.com/redhat-appstudio/gitops-repository-template",
+							Branch:             "main",
+							Path:               "components/componentA/overlays/staging",
+							GeneratedResources: []string{},
 						},
 					},
 				},
