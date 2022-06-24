@@ -127,7 +127,7 @@ var _ = Describe("Application Snapshot Environment Binding Reconciler Tests", fu
 					binding.Spec.Components[0].Name))
 		})
 
-		It("Should not update GitOpsDeployment if same Binding has no changes.", func() {
+		It("Should not update GitOpsDeployment if same Binding is created again.", func() {
 
 			// Create ApplicationSnapshotEnvironmentBinding CR in cluster.
 			err := bindingReconciler.Create(ctx, binding)

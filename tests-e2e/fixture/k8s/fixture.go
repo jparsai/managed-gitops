@@ -115,3 +115,17 @@ func UpdateStatus(obj client.Object) error {
 
 	return nil
 }
+
+func Update(obj client.Object) error {
+	k8sClient, err := fixture.GetKubeClient()
+	if err != nil {
+		return err
+	}
+
+	if err := k8sClient.Update(context.Background(), obj, &client.UpdateOptions{}); err != nil {
+		fmt.Println(K8sClientError, "Error on updating ", err)
+		return err
+	}
+
+	return nil
+}
