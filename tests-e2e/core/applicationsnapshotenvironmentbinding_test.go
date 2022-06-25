@@ -8,7 +8,6 @@ import (
 
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture"
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/k8s"
-	"k8s.io/apimachinery/pkg/util/uuid"
 
 	appstudiosharedv1 "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
@@ -106,7 +105,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler E2E tests", f
 			}))
 		})
 
-		It("Should recreate GitOpsDeployment, if it is deleted.", func() {
+		It("Should recreate GitOpsDeployment, if Binding still exists but GitOpsDeployment is deleted.", func() {
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
 
 			// Create Binding in Cluster
