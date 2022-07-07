@@ -10,7 +10,7 @@ import (
 	"github.com/redhat-appstudio/managed-gitops/backend/eventloop/shared_resource_loop"
 
 	"github.com/go-logr/logr"
-	operation "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
+	managedgitopsbackendsharedv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	db "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
@@ -225,7 +225,7 @@ func actionGetK8sClientForGitOpsEngineInstance(gitopsEngineInstance *db.GitopsEn
 	if err != nil {
 		return nil, err
 	}
-	err = operation.AddToScheme(scheme)
+	err = managedgitopsbackendsharedv1alpha1.AddToScheme(scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ type applicationEventLoopRunner_Action struct {
 }
 
 // cleanupOperation cleans up the database entry and (optionally) the CR, once an operation has concluded.
-func CleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation operation.Operation, operationNamespace string,
+func CleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperation managedgitopsbackendsharedv1alpha1.Operation, operationNamespace string,
 	dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) error {
 
 	log = log.WithValues("operation", dbOperation.Operation_id, "namespace", operationNamespace)
@@ -306,9 +306,34 @@ func CleanupOperation(ctx context.Context, dbOperation db.Operation, k8sOperatio
 }
 
 func CreateOperation(ctx context.Context, waitForOperation bool, dbOperationParam db.Operation, clusterUserID string,
-	operationNamespace string, dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) (*operation.Operation, *db.Operation, error) {
+	operationNamespace string, dbQueries db.ApplicationScopedQueries, gitopsEngineClient client.Client, log logr.Logger) (*managedgitopsbackendsharedv1alpha1.Operation, *db.Operation, error) {
 
 	var err error
+	var dbOperationList []db.Operation
+	if err = dbQueries.ListOperationsByResourceIdAndTypeAndOwnerId(ctx, dbOperationParam.Resource_id, dbOperationParam.Resource_type, &dbOperationList, clusterUserID); err != nil {
+		log.Error(err, "unable to fetch List of Operations for ResourceId: "+dbOperationParam.Resource_id+", Type: "+dbOperationParam.Resource_type+", OwnerId: "+clusterUserID)
+	}
+	// Iterate through existing DB entries for given resource
+	for _, dbOperation := range dbOperationList {
+
+		// Do not create new Operation and return existing one, if it is still unfinished.
+		if dbOperation.State != db.OperationState_Completed && dbOperation.State != db.OperationState_Failed {
+			k8sOperation := managedgitopsbackendsharedv1alpha1.Operation{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "operation-" + dbOperation.Operation_id,
+					Namespace: operationNamespace,
+				},
+			}
+
+			if err = gitopsEngineClient.Get(ctx, client.ObjectKeyFromObject(&k8sOperation), &k8sOperation); err != nil {
+				log.Error(err, "unable to fetch existing Operation "+k8sOperation.Name+" from cluster.")
+			} else {
+				log.Info("Operation already exists for resource" + dbOperationParam.Resource_id + ", it is in " + string(dbOperation.State) + " state.")
+				return &k8sOperation, &dbOperation, nil
+			}
+		}
+	}
+
 	dbOperation := db.Operation{
 		Instance_id:             dbOperationParam.Instance_id,
 		Resource_id:             dbOperationParam.Resource_id,
@@ -328,12 +353,12 @@ func CreateOperation(ctx context.Context, waitForOperation bool, dbOperationPara
 	log.Info("Created database operation", "operation", dbOperation.ShortString())
 
 	// Create K8s operation
-	operation := operation.Operation{
+	operation := managedgitopsbackendsharedv1alpha1.Operation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "operation-" + dbOperation.Operation_id,
 			Namespace: operationNamespace,
 		},
-		Spec: operation.OperationSpec{
+		Spec: managedgitopsbackendsharedv1alpha1.OperationSpec{
 			OperationID: dbOperation.Operation_id,
 		},
 	}
