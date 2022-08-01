@@ -22,6 +22,7 @@ import (
 	"time"
 
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
+	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	apibackend "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,24 +49,17 @@ type ApplicationPromotionRunReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 
 func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
-	fmt.Println("ApplicationPromotionRun event: ", req)
-
-	return ctrl.Result{}, nil
-}
-
-// Proof-of-concept/pseudocode Reconcile. Comment out the above Reconcile, and rename this to Reconcile, when starting working on this.
-func (r *ApplicationPromotionRunReconciler) ReconcilePOC(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx).WithValues("name", req.Name, "namespace", req.Namespace)
+	defer log.V(sharedutil.LogLevel_Debug).Info("Application Promotion Run Reconcile() complete.")
 
 	promotionRun := &appstudioshared.ApplicationPromotionRun{}
 
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, promotionRun); err != nil {
 		if apierr.IsNotFound(err) {
 			// Nothing more to do!
 			return ctrl.Result{}, nil
 		} else {
+			log.Error(err, "unable to retrieve ApplicationPromotionRun.")
 			return ctrl.Result{}, fmt.Errorf("unable to retrieve ApplicationPromotionRun: %v", err)
 		}
 	}
@@ -77,20 +71,20 @@ func (r *ApplicationPromotionRunReconciler) ReconcilePOC(ctx context.Context, re
 
 	if err := checkForExistingActivePromotions(ctx, *promotionRun, r.Client); err != nil {
 		// TODO: GITOPSRVCE-157 - Add error to error occurred conditions field
-		fmt.Println(err)
+		log.Error(err, "Error occureed while checking for existing active promotions.")
 		return ctrl.Result{}, nil
 	}
 
 	// If this is a automated promotion, ignore it for now
 	if promotionRun.Spec.AutomatedPromotion.InitialEnvironment != "" {
 		// TODO: GITOPSRVCE-157 - Add error to error occurred conditions field
-		fmt.Println("Note: Automated promotion not yet supported as of this writing.")
+		log.Error(fmt.Errorf("Automated promotion are not yet supported."), promotionRun.Name)
 		return ctrl.Result{}, nil
 	}
 
 	if promotionRun.Spec.ManualPromotion.TargetEnvironment == "" {
-		fmt.Println("Target environment has invalid value in " + promotionRun.Name)
 		// TODO: GITOPSRVCE-157 - Update Error Occurred status field to indicate the target environment value is invalid
+		log.Error(fmt.Errorf("Target environment has invalid value."), promotionRun.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -103,9 +97,10 @@ func (r *ApplicationPromotionRunReconciler) ReconcilePOC(ctx context.Context, re
 	if promotionRun.Status.State != appstudioshared.PromotionRunState_Active {
 		promotionRun.Status.State = appstudioshared.PromotionRunState_Active
 		if err := r.Client.Update(ctx, promotionRun); err != nil {
+			log.Error(err, "unable to update PromotionRun state")
 			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
 		}
-		// TODO: GITOPSRVCE-157 - log this action as debug
+		log.V(sharedutil.LogLevel_Debug).Info("updated PromotionRun state" + promotionRun.Name)
 	}
 
 	// Verify: activebindings should not have a value which differs from the value specified in promotionrun.spec
@@ -125,6 +120,15 @@ func (r *ApplicationPromotionRunReconciler) ReconcilePOC(ctx context.Context, re
 	}
 
 	// TODO: GITOPSRVCE-157 - Verify that the snapshot refered in binding.spec.snapshot actually exists, if not, throw error
+
+	applicationSnapshot := appstudioshared.ApplicationSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      promotionRun.Spec.Snapshot,
+			Namespace: binding.Namespace,
+		},
+	}
+
+	err = r.Client.Get(ctx, client.ObjectKeyFromObject(&applicationSnapshot), &applicationSnapshot)
 
 	// 2) Set the Binding to target the expected snapshot, if not already done
 	if binding.Spec.Snapshot != promotionRun.Spec.Snapshot || len(promotionRun.Status.ActiveBindings) == 0 {
