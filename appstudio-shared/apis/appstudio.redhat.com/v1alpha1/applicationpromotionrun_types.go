@@ -17,8 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -75,7 +73,7 @@ type ApplicationPromotionRunStatus struct {
 	ActiveBindings []string `json:"activeBindings,omitempty"`
 
 	// PromotionStartTime is set to the value when the ApplicationPromotionRun Reconciler first started the promotion.
-	PromotionStartTime time.Time `json:"promotionStartTime,omitempty"`
+	PromotionStartTime metav1.Time `json:"promotionStartTime,omitempty"`
 
 	Conditions []PromotionRunCondition `json:"conditions,omitempty"`
 }
