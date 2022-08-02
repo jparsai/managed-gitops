@@ -147,13 +147,19 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		log.Info("Updating Binding: " + binding.Name + " to target the Snapshot: " + promotionRun.Spec.Snapshot)
 
 		if promotionRun.Status.PromotionStartTime.IsZero() {
-			promotionRun.Status.PromotionStartTime = time.Now()
+			promotionRun.Status.PromotionStartTime = metav1.Now()
 		}
+
+		fmt.Println("PromotionRun status before update ==== ", promotionRun.Status)
 
 		promotionRun.Status.ActiveBindings = []string{binding.Name}
 		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
+			fmt.Println("Failed to update status.")
 			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun active binding: %v", err)
 		}
+
+		err = r.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun)
+		fmt.Println("PromotionRun status after update ==== ", promotionRun.Status)
 
 		return ctrl.Result{}, nil
 	}
@@ -207,7 +213,9 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{}, fmt.Errorf("unable to retrieve promotionRun '%s', %v", promotionRun.Name, err)
 	}
 
-	if !promotionRun.Status.PromotionStartTime.IsZero() && (time.Now().Sub(promotionRun.Status.PromotionStartTime).Minutes() > 10) {
+	fmt.Println("promotionRun.Status.PromotionStartTime === ", promotionRun.Status.PromotionStartTime)
+
+	/*if !promotionRun.Status.PromotionStartTime.IsZero() && (time.Now().Sub(promotionRun.Status.PromotionStartTime).Minutes() > 10) {
 		promotionRun.Status.CompletionResult = appstudioshared.PromotionRunCompleteResult_Failure
 		promotionRun.Status.State = appstudioshared.PromotionRunState_Complete
 
@@ -236,7 +244,7 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		if err := r.Client.Update(ctx, promotionRun); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun on successful completion: %v", err)
 		}
-	}
+	}*/
 
 	if len(waitingGitOpsDeployments) > 0 {
 		fmt.Println("Waiting for GitOpsDeployments to have expected commit/sync/health:", waitingGitOpsDeployments)

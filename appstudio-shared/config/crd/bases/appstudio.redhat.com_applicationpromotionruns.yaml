@@ -161,7 +161,8 @@ spec:
               promotionStartTime:
                 description: PromotionStartTime is set to the value when the ApplicationPromotionRun
                   Reconciler first started the promotion.
-                type: object
+                format: date-time
+                type: string
               state:
                 description: State indicates whether or not the overall promotion
                   (either manual or automated is complete)
