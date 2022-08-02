@@ -119,27 +119,39 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		}
 	}
 
-	// TODO: GITOPSRVCE-157 - Verify that the snapshot refered in binding.spec.snapshot actually exists, if not, throw error
+	// Verify that the snapshot refered in binding.spec.snapshot actually exists, if not, throw error
 
 	applicationSnapshot := appstudioshared.ApplicationSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      promotionRun.Spec.Snapshot,
+			Name:      binding.Spec.Snapshot,
 			Namespace: binding.Namespace,
 		},
 	}
 
-	err = r.Client.Get(ctx, client.ObjectKeyFromObject(&applicationSnapshot), &applicationSnapshot)
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(&applicationSnapshot), &applicationSnapshot); err != nil {
+		if apierr.IsNotFound(err) {
+			log.Error(err, "Snapshot refered in Binding does not exist.")
+			return ctrl.Result{}, fmt.Errorf("Snapshot refered in Binding does not exist.")
+		} else {
+			log.Error(err, "unable to retrieve ApplicationSnapshot.")
+			return ctrl.Result{}, fmt.Errorf("unable to retrieve ApplicationSnapshot: %v", err)
+		}
+	}
 
 	// 2) Set the Binding to target the expected snapshot, if not already done
 	if binding.Spec.Snapshot != promotionRun.Spec.Snapshot || len(promotionRun.Status.ActiveBindings) == 0 {
 		binding.Spec.Snapshot = promotionRun.Spec.Snapshot
-		if err := r.Client.Update(ctx, promotionRun); err != nil {
+		if err := r.Client.Update(ctx, &binding); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update Binding '%s' snapshot: %v", binding.Name, err)
 		}
-		// TODO: GITOPSRVCE-157 - log this action
+		log.Info("Updating Binding: " + binding.Name + " to target the Snapshot: " + promotionRun.Spec.Snapshot)
+
+		if promotionRun.Status.PromotionStartTime.IsZero() {
+			promotionRun.Status.PromotionStartTime = time.Now()
+		}
 
 		promotionRun.Status.ActiveBindings = []string{binding.Name}
-		if err := r.Client.Update(ctx, promotionRun); err != nil {
+		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun active binding: %v", err)
 		}
 
@@ -190,7 +202,41 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		}
 	}
 
-	// TODO: GITOPSRVCE-157 - Implement a time limit on the spec of Promotion Run, and fail if the conditions aren't met in the timeframe.
+	// Check time limit Promotion Run, and fail if the conditions aren't met in the timeframe.
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to retrieve promotionRun '%s', %v", promotionRun.Name, err)
+	}
+
+	if !promotionRun.Status.PromotionStartTime.IsZero() && (time.Now().Sub(promotionRun.Status.PromotionStartTime).Minutes() > 10) {
+		promotionRun.Status.CompletionResult = appstudioshared.PromotionRunCompleteResult_Failure
+		promotionRun.Status.State = appstudioshared.PromotionRunState_Complete
+
+		targetEnvIndex := 0
+		targetEnvStep := 0
+		isEnvStatusExsists := false
+		for i, j := range promotionRun.Status.EnvironmentStatus {
+			if j.EnvironmentName == promotionRun.Spec.ManualPromotion.TargetEnvironment {
+				targetEnvIndex = i
+				isEnvStatusExsists = true
+				break
+			}
+		}
+
+		if !isEnvStatusExsists {
+			for _, j := range promotionRun.Status.EnvironmentStatus {
+				if j.Step > targetEnvIndex {
+					targetEnvStep = j.Step
+				}
+			}
+			promotionRun.Status.EnvironmentStatus[targetEnvIndex].Step = targetEnvStep + 1
+			promotionRun.Status.EnvironmentStatus[targetEnvIndex].EnvironmentName = promotionRun.Spec.ManualPromotion.TargetEnvironment
+		}
+		promotionRun.Status.EnvironmentStatus[targetEnvIndex].DisplayStatus = "Promotion Failed. Could not be completed in 10 Minutes"
+
+		if err := r.Client.Update(ctx, promotionRun); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun on successful completion: %v", err)
+		}
+	}
 
 	if len(waitingGitOpsDeployments) > 0 {
 		fmt.Println("Waiting for GitOpsDeployments to have expected commit/sync/health:", waitingGitOpsDeployments)
