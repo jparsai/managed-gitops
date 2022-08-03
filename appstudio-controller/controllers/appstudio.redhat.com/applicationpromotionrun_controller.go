@@ -19,6 +19,7 @@ package appstudioredhatcom
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
@@ -111,7 +112,7 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 
 	if promotionRun.Status.State != appstudioshared.PromotionRunState_Active {
 		promotionRun.Status.State = appstudioshared.PromotionRunState_Active
-		if err := r.Client.Update(ctx, promotionRun); err != nil {
+		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
 			log.Error(err, "unable to update PromotionRun state")
 			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
 		}
@@ -246,6 +247,12 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 
 	if len(waitingGitOpsDeployments) > 0 {
 		fmt.Println("Waiting for GitOpsDeployments to have expected commit/sync/health:", waitingGitOpsDeployments)
+		promotionRun.Status.State = appstudioshared.PromotionRunState_Waiting
+
+		if promotionRun, err = updateStatusEnvironmentStatus(ctx, r.Client, "Waiting for following GitOpsDeployments to be Synced/Healthy "+strings.Join(waitingGitOpsDeployments[:], ", "),
+			promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_InProgress); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
+		}
 		return ctrl.Result{RequeueAfter: time.Second * 15}, nil
 	}
 
