@@ -70,21 +70,65 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	if err := checkForExistingActivePromotions(ctx, *promotionRun, r.Client); err != nil {
-		// TODO: GITOPSRVCE-157 - Add error to error occurred conditions field
 		log.Error(err, "Error occureed while checking for existing active promotions.")
+		now := metav1.Now()
+		promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
+			appstudioshared.PromotionRunCondition{
+				Type:               appstudioshared.PromotionRunConditionErrorOccurred,
+				Message:            "Error occureed while checking for existing active promotions.",
+				LastProbeTime:      now,
+				LastTransitionTime: &now,
+				Status:             appstudioshared.PromotionRunConditionStatusFalse,
+				Reason:             appstudioshared.PromotionRunReasonErrorOccurred,
+			})
+
+		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
+			log.Error(err, "unable to update PromotionRun state")
+			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
 	// If this is a automated promotion, ignore it for now
 	if promotionRun.Spec.AutomatedPromotion.InitialEnvironment != "" {
-		// TODO: GITOPSRVCE-157 - Add error to error occurred conditions field
 		log.Error(fmt.Errorf("Automated promotion are not yet supported."), promotionRun.Name)
+		now := metav1.Now()
+		promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
+			appstudioshared.PromotionRunCondition{
+				Type:               appstudioshared.PromotionRunConditionErrorOccurred,
+				Message:            "Automated promotion are not yet supported.",
+				LastProbeTime:      now,
+				LastTransitionTime: &now,
+				Status:             appstudioshared.PromotionRunConditionStatusFalse,
+				Reason:             appstudioshared.PromotionRunReasonErrorOccurred,
+			})
+
+		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
+			log.Error(err, "unable to update PromotionRun state")
+			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
 	if promotionRun.Spec.ManualPromotion.TargetEnvironment == "" {
-		// TODO: GITOPSRVCE-157 - Update Error Occurred status field to indicate the target environment value is invalid
 		log.Error(fmt.Errorf("Target environment has invalid value."), promotionRun.Name)
+		now := metav1.Now()
+		promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
+			appstudioshared.PromotionRunCondition{
+				Type:               appstudioshared.PromotionRunConditionErrorOccurred,
+				Message:            "Target environment has invalid value.",
+				LastProbeTime:      now,
+				LastTransitionTime: &now,
+				Status:             appstudioshared.PromotionRunConditionStatusFalse,
+				Reason:             appstudioshared.PromotionRunReasonErrorOccurred,
+			})
+
+		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
+			log.Error(err, "unable to update PromotionRun state")
+			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -112,8 +156,23 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 					"The .spec fields of the PromotionRun are immutable, and should not be changed "+
 					"after being created. old-binding: %s, new-binding: %s\n", existingActiveBinding, binding.Name)
 
-				// TODO: GITOPSRVCE-157 - Update error occurred status field
+				now := metav1.Now()
+				promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
+					appstudioshared.PromotionRunCondition{
+						Type: appstudioshared.PromotionRunConditionErrorOccurred,
+						Message: "The binding changed after the PromotionRun first start. " +
+							"The .spec fields of the PromotionRun are immutable, and should not be changed " +
+							"after being created. old-binding: " + existingActiveBinding + ", new-binding: " + binding.Name,
+						LastProbeTime:      now,
+						LastTransitionTime: &now,
+						Status:             appstudioshared.PromotionRunConditionStatusFalse,
+						Reason:             appstudioshared.PromotionRunReasonErrorOccurred,
+					})
 
+				if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
+					log.Error(err, "unable to update PromotionRun state")
+					return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun state: %v", err)
+				}
 				return ctrl.Result{}, nil
 			}
 		}
@@ -160,7 +219,12 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 
 	// 3) Wait for the environment binding to create all of the expected GitOpsDeployments
 	if len(binding.Status.GitOpsDeployments) != len(binding.Spec.Components) {
-		// TODO: GITOPSRVCE-157 - Update promotionRun.Status.EnvironmentStatus.DisplayName, indicating that we are waiting for all the gitopsdeployments
+		promotionRun.Status.State = appstudioshared.PromotionRunState_Waiting
+
+		if promotionRun, err = updateEnvironmentStatus(ctx, r.Client, "Waiting for the environment binding to create all of the expected GitOpsDeployments.",
+			promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_InProgress); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -183,7 +247,13 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 
 		// Must have status of Synced/Healthy
 		if gitopsDeployment.Status.Sync.Status == apibackend.SyncStatusCodeSynced && gitopsDeployment.Status.Health.Status != apibackend.HeathStatusCodeHealthy {
-			// TODO: GITOPSRVCE-157 - Update Status.EnvironmentStatus to indicate that the gitopsdeployment is not synced/healthy
+			promotionRun.Status.State = appstudioshared.PromotionRunState_Waiting
+
+			if promotionRun, err = updateEnvironmentStatus(ctx, r.Client, "waiting for GitOpsDeployments to get in Sync/Healthy.",
+				promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_InProgress); err != nil {
+				return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
+			}
+
 			waitingGitOpsDeployments = append(waitingGitOpsDeployments, gitopsDeployment.Name)
 			continue
 		}
@@ -211,42 +281,9 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		promotionRun.Status.CompletionResult = appstudioshared.PromotionRunCompleteResult_Failure
 		promotionRun.Status.State = appstudioshared.PromotionRunState_Complete
 
-		targetEnvIndex, targetEnvStep, isEnvStatusExsists := 0, 0, false
-
-		// Check if EnvironmentStatus for given Environment is already present.
-		for i, envStatus := range promotionRun.Status.EnvironmentStatus {
-			// Find the Index in array having status for given environment.
-			if envStatus.EnvironmentName == promotionRun.Spec.ManualPromotion.TargetEnvironment {
-				targetEnvIndex = i
-				isEnvStatusExsists = true
-				break
-			}
-		}
-
-		// If given environment is not present already then create new else update existing one.
-		if !isEnvStatusExsists {
-			// Find the max Step and Index available
-			for _, j := range promotionRun.Status.EnvironmentStatus {
-				if j.Step > targetEnvIndex {
-					targetEnvStep = j.Step
-				}
-			}
-
-			promotionRun.Status.EnvironmentStatus = append(promotionRun.Status.EnvironmentStatus,
-				appstudioshared.PromotionRunEnvironmentStatus{
-					Step:            targetEnvStep + 1,
-					EnvironmentName: promotionRun.Spec.ManualPromotion.TargetEnvironment,
-					DisplayStatus:   "Promotion Failed. Could not be completed in 10 Minutes.",
-					Status:          appstudioshared.ApplicationPromotionRunEnvironmentStatus_Failed,
-				})
-		} else {
-			// Status for given environment exists, just update it.
-			promotionRun.Status.EnvironmentStatus[targetEnvIndex].DisplayStatus = "Promotion Failed. Could not be completed in 10 Minutes."
-			promotionRun.Status.EnvironmentStatus[targetEnvIndex].Status = appstudioshared.ApplicationPromotionRunEnvironmentStatus_Failed
-		}
-
-		if err := r.Client.Status().Update(ctx, promotionRun); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun on successful completion: %v", err)
+		if promotionRun, err = updateEnvironmentStatus(ctx, r.Client, "Promotion Failed. Could not be completed in 10 Minutes.",
+			promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_Failed); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
 		}
 	}
 
@@ -260,13 +297,11 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 	promotionRun.Status.CompletionResult = appstudioshared.PromotionRunCompleteResult_Success
 	promotionRun.Status.State = appstudioshared.PromotionRunState_Complete
 	promotionRun.Status.ActiveBindings = []string{binding.Name}
-	if err := r.Client.Update(ctx, promotionRun); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to update PromotionRun on successful completion: %v", err)
+
+	if promotionRun, err = updateEnvironmentStatus(ctx, r.Client, "All GitOpsDeployments are Synced/Healthy",
+		promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_Success); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
 	}
-
-	// TODO: GITOPSRVCE-157 - Update promotionRun.Status.EnvironmentStatus to indicate which GitOpsDeployments we are still waiting for
-
-	// TODO: GITOPSRVCE-157 - Update promotionRun.Status.EnvironmentStatus
 
 	return ctrl.Result{}, nil
 }
@@ -329,4 +364,47 @@ func (r *ApplicationPromotionRunReconciler) SetupWithManager(mgr ctrl.Manager) e
 		For(&appstudioshared.ApplicationPromotionRun{}).
 		Owns(&appstudioshared.ApplicationSnapshotEnvironmentBinding{}).
 		Complete(r)
+}
+
+func updateEnvironmentStatus(ctx context.Context, client client.Client, displayStatus string, promotionRun *appstudioshared.ApplicationPromotionRun,
+	status appstudioshared.PromotionRunEnvironmentStatusField) (*appstudioshared.ApplicationPromotionRun, error) {
+
+	targetEnvIndex, targetEnvStep, isEnvStatusExsists := 0, 0, false
+
+	// Check if EnvironmentStatus for given Environment is already present.
+	for i, envStatus := range promotionRun.Status.EnvironmentStatus {
+		// Find the Index in array having status for given environment.
+		if envStatus.EnvironmentName == promotionRun.Spec.ManualPromotion.TargetEnvironment {
+			targetEnvIndex = i
+			isEnvStatusExsists = true
+			break
+		}
+	}
+
+	// If given environment is not present already then create new else update existing one.
+	if !isEnvStatusExsists {
+		// Find the max Step and Index available
+		for _, j := range promotionRun.Status.EnvironmentStatus {
+			if j.Step > targetEnvIndex {
+				targetEnvStep = j.Step
+			}
+		}
+
+		promotionRun.Status.EnvironmentStatus = append(promotionRun.Status.EnvironmentStatus,
+			appstudioshared.PromotionRunEnvironmentStatus{
+				Step:            targetEnvStep + 1,
+				EnvironmentName: promotionRun.Spec.ManualPromotion.TargetEnvironment,
+				DisplayStatus:   displayStatus,
+				Status:          status,
+			})
+	} else {
+		// Status for given environment exists, just update it.
+		promotionRun.Status.EnvironmentStatus[targetEnvIndex].DisplayStatus = displayStatus
+		promotionRun.Status.EnvironmentStatus[targetEnvIndex].Status = status
+	}
+
+	if err := client.Status().Update(ctx, promotionRun); err != nil {
+		return promotionRun, err
+	}
+	return promotionRun, nil
 }
