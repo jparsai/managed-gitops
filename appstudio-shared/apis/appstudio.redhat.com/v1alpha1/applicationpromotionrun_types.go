@@ -178,7 +178,7 @@ type PromotionRunCondition struct {
 type PromotionRunConditionType string
 
 const (
-	GitOpsDeploymentConditionErrorOccurred PromotionRunConditionType = "ErrorOccurred"
+	PromotionRunConditionErrorOccurred PromotionRunConditionType = "ErrorOccurred"
 )
 
 // PromotionRunConditionStatus is a type which represents possible comparison results
