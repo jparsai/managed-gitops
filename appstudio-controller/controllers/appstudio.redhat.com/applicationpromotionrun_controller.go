@@ -96,7 +96,7 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		log.Error(fmt.Errorf("Target environment has invalid value."), promotionRun.Name)
 
 		var err error
-		if promotionRun, err = updateStatusConditions(ctx, r.Client, "Target environment has invalid value.", promotionRun, appstudioshared.PromotionRunConditionErrorOccurred,
+		if promotionRun, err = updateStatusConditions(ctx, r.Client, "Target Environment has invalid value.", promotionRun, appstudioshared.PromotionRunConditionErrorOccurred,
 			appstudioshared.PromotionRunConditionStatusFalse, appstudioshared.PromotionRunReasonErrorOccurred); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
 		}
@@ -177,8 +177,6 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 
 	// 3) Wait for the environment binding to create all of the expected GitOpsDeployments
 	if len(binding.Status.GitOpsDeployments) != len(binding.Spec.Components) {
-		promotionRun.Status.State = appstudioshared.PromotionRunState_Waiting
-
 		if promotionRun, err = updateStatusEnvironmentStatus(ctx, r.Client, "Waiting for the environment binding to create all of the expected GitOpsDeployments.",
 			promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_InProgress); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
@@ -186,7 +184,7 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{}, nil
 	}
 
-	gitopsRepositoryCommitsWithSnapshot := []string{} /* we need a mechanism to tell which gitops repository revision corresponds to which snapshot*/
+	//gitopsRepositoryCommitsWithSnapshot := []string{"main"} /* we need a mechanism to tell which gitops repository revision corresponds to which snapshot*/
 
 	// 4) Wait for all the GitOpsDeployments of the binding to have the expected state
 	waitingGitOpsDeployments := []string{}
@@ -216,18 +214,20 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 			continue
 		}
 
-		// Argo CD must have deployed at least one of the commits that include the Snapshot container images
-		match := false
-		for _, snapshotCommit := range gitopsRepositoryCommitsWithSnapshot {
-			if gitopsDeployment.Status.Sync.Revision == snapshotCommit {
-				match = true
-				break
+		/*
+			// Argo CD must have deployed at least one of the commits that include the Snapshot container images
+			match := false
+			for _, snapshotCommit := range gitopsRepositoryCommitsWithSnapshot {
+				if gitopsDeployment.Status.Sync.Revision == snapshotCommit {
+					match = true
+					break
+				}
 			}
-		}
-		if !match {
-			waitingGitOpsDeployments = append(waitingGitOpsDeployments, gitopsDeployment.Name)
-			continue
-		}
+
+			if !match {
+				waitingGitOpsDeployments = append(waitingGitOpsDeployments, gitopsDeployment.Name)
+				continue
+			}*/
 	}
 
 	// Check time limit set for PromotionRun reconcilation, fail if the conditions aren't met in the given timeframe.
@@ -249,7 +249,7 @@ func (r *ApplicationPromotionRunReconciler) Reconcile(ctx context.Context, req c
 		fmt.Println("Waiting for GitOpsDeployments to have expected commit/sync/health:", waitingGitOpsDeployments)
 		promotionRun.Status.State = appstudioshared.PromotionRunState_Waiting
 
-		if promotionRun, err = updateStatusEnvironmentStatus(ctx, r.Client, "Waiting for following GitOpsDeployments to be Synced/Healthy "+strings.Join(waitingGitOpsDeployments[:], ", "),
+		if promotionRun, err = updateStatusEnvironmentStatus(ctx, r.Client, "Waiting for following GitOpsDeployments to be Synced/Healthy: "+strings.Join(waitingGitOpsDeployments[:], ", "),
 			promotionRun, appstudioshared.ApplicationPromotionRunEnvironmentStatus_InProgress); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to update promotionRun %v", err)
 		}
