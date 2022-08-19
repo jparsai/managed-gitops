@@ -2,7 +2,7 @@ package appstudioredhatcom
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	appstudiosharedv1 "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
-	apibackend "github.com/redhat-appstudio/managed-gitops/backend/apis/managed-gitops/v1alpha1"
-	"github.com/redhat-appstudio/managed-gitops/backend/eventloop/eventlooptypes"
+	apibackend "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/tests"
 )
 
 var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func() {
@@ -35,7 +35,10 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 				argocdNamespace,
 				kubesystemNamespace,
 				apiNamespace,
-				err := eventlooptypes.GenericTestSetup()
+				err := tests.GenericTestSetup()
+			Expect(err).To(BeNil())
+
+			err = appstudiosharedv1.AddToScheme(scheme)
 			Expect(err).To(BeNil())
 
 			// Create fake client
@@ -490,107 +493,6 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
 		})
 
-		It("Should waiting for GitOpsDeployments to have expected commit/sync/health: Scenario 1.", func() {
-			applicationSnapshot := appstudiosharedv1.ApplicationSnapshot{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "appstudio.redhat.com/v1alpha1",
-					Kind:       "ApplicationSnapshot",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      promotionRun.Spec.Snapshot,
-					Namespace: promotionRun.Namespace,
-				},
-				Spec: appstudiosharedv1.ApplicationSnapshotSpec{
-					Application: promotionRun.Spec.Application,
-					DisplayName: promotionRun.Spec.Application,
-				},
-			}
-
-			err := promotionRunReconciler.Create(ctx, &applicationSnapshot)
-			Expect(err).To(BeNil())
-
-			binding := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "appstudio.redhat.com/v1alpha1",
-					Kind:       "ApplicationSnapshotEnvironmentBinding",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "appa-staging-binding",
-					Namespace: promotionRun.Namespace,
-				},
-				Spec: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingSpec{
-					Application: promotionRun.Spec.Application,
-					Environment: promotionRun.Spec.ManualPromotion.TargetEnvironment,
-					Snapshot:    promotionRun.Spec.Snapshot,
-					Components: []appstudiosharedv1.BindingComponent{
-						{
-							Name: "component-a",
-							Configuration: appstudiosharedv1.BindingComponentConfiguration{
-								Env: []appstudiosharedv1.EnvVarPair{
-									{Name: "My_STG_ENV", Value: "1000"},
-								},
-								Replicas: 3,
-							},
-						},
-					},
-				},
-				Status: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{
-					GitOpsDeployments: []appstudiosharedv1.BindingStatusGitOpsDeployment{
-						{
-							ComponentName:    "component-a",
-							GitOpsDeployment: "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
-						},
-					},
-				},
-			}
-
-			err = promotionRunReconciler.Create(ctx, binding)
-			Expect(err).To(BeNil())
-
-			gitOpsDeployment := &apibackend.GitOpsDeployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
-					Namespace: binding.Namespace,
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: binding.APIVersion,
-							Kind:       binding.Kind,
-							Name:       binding.Name,
-							UID:        binding.UID,
-						},
-					},
-				},
-				Spec: apibackend.GitOpsDeploymentSpec{
-					Source: apibackend.ApplicationSource{
-						RepoURL:        "https://github.com/redhat-appstudio/gitops-repository-template",
-						Path:           "components/componentA/overlays/staging",
-						TargetRevision: "main",
-					},
-					Type:        apibackend.GitOpsDeploymentSpecType_Automated, // Default to automated, for now
-					Destination: apibackend.ApplicationDestination{},           // Default to same namespace, for now
-				},
-			}
-
-			err = promotionRunReconciler.Create(ctx, gitOpsDeployment)
-			Expect(err).To(BeNil())
-
-			promotionRun.Status.ActiveBindings = []string{binding.Name}
-			err = promotionRunReconciler.Create(ctx, promotionRun)
-			Expect(err).To(BeNil())
-
-			// Trigger Reconciler
-			_, err = promotionRunReconciler.Reconcile(ctx, request)
-			Expect(err).To(BeNil())
-
-			err = promotionRunReconciler.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun)
-			Expect(err).To(BeNil())
-			Expect(len(promotionRun.Status.EnvironmentStatus) > 0).To(BeTrue())
-			Expect(promotionRun.Status.EnvironmentStatus[0].Step).To(Equal(1))
-			Expect(promotionRun.Status.EnvironmentStatus[0].DisplayStatus).To(Equal("Waiting for following GitOpsDeployments to be Synced/Healthy: " + gitOpsDeployment.Name))
-			Expect(promotionRun.Status.EnvironmentStatus[0].Status).To(Equal(appstudiosharedv1.ApplicationPromotionRunEnvironmentStatus_InProgress))
-			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
-		})
-
 		It("Should waiting for GitOpsDeployments to have expected commit/sync/health: Scenario 2.", func() {
 			applicationSnapshot := appstudiosharedv1.ApplicationSnapshot{
 				TypeMeta: metav1.TypeMeta{
@@ -690,7 +592,6 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 
 			err = promotionRunReconciler.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun)
 			Expect(err).To(BeNil())
-			fmt.Println("promotionRun.Status.EnvironmentStatus === ", promotionRun.Status.EnvironmentStatus)
 			Expect(len(promotionRun.Status.EnvironmentStatus) > 0).To(BeTrue())
 			Expect(promotionRun.Status.EnvironmentStatus[0].Step).To(Equal(1))
 			Expect(promotionRun.Status.EnvironmentStatus[0].DisplayStatus).To(Equal("Waiting for following GitOpsDeployments to be Synced/Healthy: " + gitOpsDeployment.Name))
@@ -698,8 +599,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
 		})
 
-		It("Should .", func() {
-			fmt.Println("===============")
+		It("Should 1.", func() {
 			applicationSnapshot := appstudiosharedv1.ApplicationSnapshot{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "appstudio.redhat.com/v1alpha1",
@@ -806,6 +706,211 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(promotionRun.Status.EnvironmentStatus[0].Step).To(Equal(1))
 			Expect(promotionRun.Status.EnvironmentStatus[0].DisplayStatus).To(Equal("All GitOpsDeployments are Synced/Healthy"))
 			Expect(promotionRun.Status.EnvironmentStatus[0].Status).To(Equal(appstudiosharedv1.ApplicationPromotionRunEnvironmentStatus_Success))
+			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
+		})
+
+		It("Should create GitOpsDeployments and it should be Synced/Healthy.", func() {
+			applicationSnapshot := appstudiosharedv1.ApplicationSnapshot{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "appstudio.redhat.com/v1alpha1",
+					Kind:       "ApplicationSnapshot",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      promotionRun.Spec.Snapshot,
+					Namespace: promotionRun.Namespace,
+				},
+				Spec: appstudiosharedv1.ApplicationSnapshotSpec{
+					Application: promotionRun.Spec.Application,
+					DisplayName: promotionRun.Spec.Application,
+				},
+			}
+
+			err := promotionRunReconciler.Create(ctx, &applicationSnapshot)
+			Expect(err).To(BeNil())
+
+			binding := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "appstudio.redhat.com/v1alpha1",
+					Kind:       "ApplicationSnapshotEnvironmentBinding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "appa-staging-binding",
+					Namespace: promotionRun.Namespace,
+				},
+				Spec: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingSpec{
+					Application: promotionRun.Spec.Application,
+					Environment: promotionRun.Spec.ManualPromotion.TargetEnvironment,
+					Snapshot:    promotionRun.Spec.Snapshot,
+					Components: []appstudiosharedv1.BindingComponent{
+						{
+							Name: "component-a",
+							Configuration: appstudiosharedv1.BindingComponentConfiguration{
+								Env: []appstudiosharedv1.EnvVarPair{
+									{Name: "My_STG_ENV", Value: "1000"},
+								},
+								Replicas: 3,
+							},
+						},
+					},
+				},
+				Status: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{
+					GitOpsDeployments: []appstudiosharedv1.BindingStatusGitOpsDeployment{
+						{
+							ComponentName:    "component-a",
+							GitOpsDeployment: "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
+						},
+					},
+				},
+			}
+
+			err = promotionRunReconciler.Create(ctx, binding)
+			Expect(err).To(BeNil())
+
+			gitOpsDeployment := &apibackend.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
+					Namespace: binding.Namespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: binding.APIVersion,
+							Kind:       binding.Kind,
+							Name:       binding.Name,
+							UID:        binding.UID,
+						},
+					},
+				},
+				Spec: apibackend.GitOpsDeploymentSpec{
+					Source: apibackend.ApplicationSource{
+						RepoURL:        "https://github.com/redhat-appstudio/gitops-repository-template",
+						Path:           "components/componentA/overlays/staging",
+						TargetRevision: "main",
+					},
+					Type:        apibackend.GitOpsDeploymentSpecType_Automated, // Default to automated, for now
+					Destination: apibackend.ApplicationDestination{},           // Default to same namespace, for now
+				},
+			}
+
+			err = promotionRunReconciler.Create(ctx, gitOpsDeployment)
+			Expect(err).To(BeNil())
+
+			promotionRun.Status.ActiveBindings = []string{binding.Name}
+			err = promotionRunReconciler.Create(ctx, promotionRun)
+			Expect(err).To(BeNil())
+
+			// Trigger Reconciler
+			_, err = promotionRunReconciler.Reconcile(ctx, request)
+			Expect(err).To(BeNil())
+
+			err = promotionRunReconciler.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun)
+			Expect(err).To(BeNil())
+			Expect(len(promotionRun.Status.EnvironmentStatus) > 0).To(BeTrue())
+			Expect(promotionRun.Status.EnvironmentStatus[0].Step).To(Equal(1))
+			Expect(promotionRun.Status.EnvironmentStatus[0].DisplayStatus).To(Equal("All GitOpsDeployments are Synced/Healthy"))
+			Expect(promotionRun.Status.EnvironmentStatus[0].Status).To(Equal(appstudiosharedv1.ApplicationPromotionRunEnvironmentStatus_Success))
+			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
+		})
+
+		It("Should fail if GitOpsDeployments are not Synced/Healthy in given time limit.", func() {
+			applicationSnapshot := appstudiosharedv1.ApplicationSnapshot{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "appstudio.redhat.com/v1alpha1",
+					Kind:       "ApplicationSnapshot",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      promotionRun.Spec.Snapshot,
+					Namespace: promotionRun.Namespace,
+				},
+				Spec: appstudiosharedv1.ApplicationSnapshotSpec{
+					Application: promotionRun.Spec.Application,
+					DisplayName: promotionRun.Spec.Application,
+				},
+			}
+
+			err := promotionRunReconciler.Create(ctx, &applicationSnapshot)
+			Expect(err).To(BeNil())
+
+			binding := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "appstudio.redhat.com/v1alpha1",
+					Kind:       "ApplicationSnapshotEnvironmentBinding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "appa-staging-binding",
+					Namespace: promotionRun.Namespace,
+				},
+				Spec: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingSpec{
+					Application: promotionRun.Spec.Application,
+					Environment: promotionRun.Spec.ManualPromotion.TargetEnvironment,
+					Snapshot:    promotionRun.Spec.Snapshot,
+					Components: []appstudiosharedv1.BindingComponent{
+						{
+							Name: "component-a",
+							Configuration: appstudiosharedv1.BindingComponentConfiguration{
+								Env: []appstudiosharedv1.EnvVarPair{
+									{Name: "My_STG_ENV", Value: "1000"},
+								},
+								Replicas: 3,
+							},
+						},
+					},
+				},
+				Status: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{
+					GitOpsDeployments: []appstudiosharedv1.BindingStatusGitOpsDeployment{
+						{
+							ComponentName:    "component-a",
+							GitOpsDeployment: "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
+						},
+					},
+				},
+			}
+
+			err = promotionRunReconciler.Create(ctx, binding)
+			Expect(err).To(BeNil())
+
+			gitOpsDeployment := &apibackend.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "appa-staging-binding-" + promotionRun.Spec.Application + "-" + promotionRun.Spec.ManualPromotion.TargetEnvironment + "-component-a",
+					Namespace: binding.Namespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: binding.APIVersion,
+							Kind:       binding.Kind,
+							Name:       binding.Name,
+							UID:        binding.UID,
+						},
+					},
+				},
+				Spec: apibackend.GitOpsDeploymentSpec{
+					Source: apibackend.ApplicationSource{
+						RepoURL:        "https://github.com/redhat-appstudio/gitops-repository-template",
+						Path:           "components/componentA/overlays/staging",
+						TargetRevision: "main",
+					},
+					Type:        apibackend.GitOpsDeploymentSpecType_Automated, // Default to automated, for now
+					Destination: apibackend.ApplicationDestination{},           // Default to same namespace, for now
+				},
+			}
+
+			err = promotionRunReconciler.Create(ctx, gitOpsDeployment)
+			Expect(err).To(BeNil())
+
+			promotionRun.Status.ActiveBindings = []string{binding.Name}
+			then := metav1.Now().Add(time.Duration(-(PromotionRunTimeOutLimit + 2)) * time.Minute)
+
+			promotionRun.Status.PromotionStartTime = metav1.NewTime(then)
+			err = promotionRunReconciler.Create(ctx, promotionRun)
+			Expect(err).To(BeNil())
+
+			// Trigger Reconciler
+			_, err = promotionRunReconciler.Reconcile(ctx, request)
+			Expect(err).To(BeNil())
+
+			err = promotionRunReconciler.Client.Get(ctx, client.ObjectKeyFromObject(promotionRun), promotionRun)
+			Expect(err).To(BeNil())
+			Expect(len(promotionRun.Status.EnvironmentStatus) > 0).To(BeTrue())
+			Expect(promotionRun.Status.EnvironmentStatus[0].Step).To(Equal(1))
+			Expect(promotionRun.Status.EnvironmentStatus[0].DisplayStatus).To(Equal("Promotion Failed. Could not be completed in " + strconv.Itoa(PromotionRunTimeOutLimit) + " Minutes."))
+			Expect(promotionRun.Status.EnvironmentStatus[0].Status).To(Equal(appstudiosharedv1.ApplicationPromotionRunEnvironmentStatus_Failed))
 			Expect(promotionRun.Status.EnvironmentStatus[0].EnvironmentName).To(Equal(environment.Name))
 		})
 	})
