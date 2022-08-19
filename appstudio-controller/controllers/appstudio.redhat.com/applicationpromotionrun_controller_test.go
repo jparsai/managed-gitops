@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -915,13 +914,3 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 		})
 	})
 })
-
-// newRequest contains the information necessary to reconcile a Kubernetes object.
-func newRequest(namespace, name string) reconcile.Request {
-	return reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-}
