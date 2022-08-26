@@ -1,9 +1,6 @@
 package core
 
 import (
-	"fmt"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appstudiocontroller "github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/appstudio.redhat.com"
@@ -12,6 +9,8 @@ import (
 
 	appstudiosharedv1 "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
+	bindingFixture "github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/binding"
+	promotionRunFixture "github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/promotionrun"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,7 +31,7 @@ var _ = Describe("GitOpsDeployment E2E tests", func() {
 			err = k8s.Create(&applicationSnapshot)
 			Expect(err).To(Succeed())
 
-			bindingStage := buildApplicationSnapshotEnvironmentBindingResource("appa-staging-binding", "new-demo-app", "staging", "my-snapshot", 3, []string{"component-a", "component-b"})
+			bindingStage := buildApplicationSnapshotEnvironmentBindingResource("appa-staging-binding", "new-demo-app", "staging", "my-snapshot", 3, []string{"component-a"})
 			err = k8s.Create(&bindingStage)
 			Expect(err).To(Succeed())
 
@@ -43,7 +42,7 @@ var _ = Describe("GitOpsDeployment E2E tests", func() {
 			err = k8s.UpdateStatus(&bindingStage)
 			Expect(err).To(Succeed())
 
-			bindingProd := buildApplicationSnapshotEnvironmentBindingResource("appa-prod-binding", "new-demo-app", "prod", "my-snapshot", 3, []string{"component-a", "component-b"})
+			bindingProd := buildApplicationSnapshotEnvironmentBindingResource("appa-prod-binding", "new-demo-app", "prod", "my-snapshot", 3, []string{"component-a"})
 			err = k8s.Create(&bindingProd)
 			Expect(err).To(Succeed())
 
@@ -57,22 +56,17 @@ var _ = Describe("GitOpsDeployment E2E tests", func() {
 			//====================================================
 			By("Verify that Status.GitOpsDeployments field of Binding is having Component and GitOpsDeployment name.")
 
-			time.Sleep(2 * time.Minute)
 			gitOpsDeploymentNameStage := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingStage, bindingStage.Spec.Components[0].Name)
-			fmt.Println("gitOpsDeploymentNameStage == ", gitOpsDeploymentNameStage)
-
-			/*expectedGitOpsDeploymentStage := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+			expectedGitOpsDeploymentsStage := []appstudiosharedv1.BindingStatusGitOpsDeployment{
 				{ComponentName: bindingStage.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameStage},
 			}
-			Eventually(bindingStage, "2m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentStage))*/
+			Eventually(bindingStage, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsStage))
 
 			gitOpsDeploymentNameProd := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingProd, bindingProd.Spec.Components[0].Name)
-			fmt.Println("gitOpsDeploymentNameProd == ", gitOpsDeploymentNameProd)
-
-			/*expectedGitOpsDeploymentProd := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+			expectedGitOpsDeploymentsProd := []appstudiosharedv1.BindingStatusGitOpsDeployment{
 				{ComponentName: bindingProd.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameProd},
 			}
-			Eventually(bindingProd, "2m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentProd))*/
+			Eventually(bindingProd, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsProd))
 
 			gitOpsDeploymentStage := v1alpha1.GitOpsDeployment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -96,28 +90,21 @@ var _ = Describe("GitOpsDeployment E2E tests", func() {
 			err = k8s.Create(&promotionRun)
 			Expect(err).To(Succeed())
 
-			err = k8s.Get(&promotionRun)
-			fmt.Println("promotionRun.Status = ", promotionRun.Status)
-			fmt.Println("promotionRun.Status.ActiveBindings = ", promotionRun.Status.ActiveBindings)
-			fmt.Println("promotionRun.Status.EnvironmentStatus = ", promotionRun.Status.EnvironmentStatus)
-			fmt.Println("promotionRun.Status.PromotionStartTime = ", promotionRun.Status.PromotionStartTime)
-			fmt.Println("promotionRun.Status.CompletionResult = ", promotionRun.Status.CompletionResult)
-			fmt.Println("promotionRun.Status.Conditions = ", promotionRun.Status.Conditions)
-			fmt.Println("promotionRun.Status.State = ", promotionRun.Status.State)
+			expectedPromotionRunStatus := appstudiosharedv1.ApplicationPromotionRunStatus{
+				State:            appstudiosharedv1.PromotionRunState_Complete,
+				CompletionResult: appstudiosharedv1.PromotionRunCompleteResult_Success,
+				ActiveBindings:   []string{bindingProd.Name},
+				EnvironmentStatus: []appstudiosharedv1.PromotionRunEnvironmentStatus{
+					{
+						Step:            1,
+						EnvironmentName: environmentProd.Name,
+						Status:          appstudiosharedv1.ApplicationPromotionRunEnvironmentStatus_Success,
+						DisplayStatus:   "All GitOpsDeployments are Synced/Healthy",
+					},
+				},
+			}
 
-			Expect(err).To(Succeed())
-
-			time.Sleep(1 * time.Minute)
-			err = k8s.Get(&promotionRun)
-			fmt.Println("promotionRun.Status = ", promotionRun.Status)
-			fmt.Println("promotionRun.Status.ActiveBindings = ", promotionRun.Status.ActiveBindings)
-			fmt.Println("promotionRun.Status.EnvironmentStatus = ", promotionRun.Status.EnvironmentStatus)
-			fmt.Println("promotionRun.Status.PromotionStartTime = ", promotionRun.Status.PromotionStartTime)
-			fmt.Println("promotionRun.Status.CompletionResult = ", promotionRun.Status.CompletionResult)
-			fmt.Println("promotionRun.Status.Conditions = ", promotionRun.Status.Conditions)
-			fmt.Println("promotionRun.Status.State = ", promotionRun.Status.State)
-
-			Expect(err).To(Succeed())
+			Eventually(promotionRun, "3m", "1s").Should(promotionRunFixture.HaveStatusComplete(expectedPromotionRunStatus))
 		})
 	})
 })
@@ -143,24 +130,6 @@ func buildEnvironmentResource(name, displayName, parentEnvironment string, envTy
 			},
 		},
 	}
-	/*
-
-	   metadata:
-	     name: staging
-	   spec:
-	     type: poc
-	     displayName: “Production for Team A”
-	     deploymentStrategy: AppStudioAutomated
-	     parentEnvironment: staging
-	     tags:
-	       - staging
-	     configuration:
-	       env:
-	         - name: My_STG_ENV
-	           value: "100"
-
-
-	*/
 
 	return environment
 }
