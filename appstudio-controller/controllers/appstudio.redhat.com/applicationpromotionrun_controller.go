@@ -385,16 +385,29 @@ func updateStatusConditions(ctx context.Context, client client.Client, message s
 	promotionRun *appstudioshared.ApplicationPromotionRun, conditionType appstudioshared.PromotionRunConditionType,
 	status appstudioshared.PromotionRunConditionStatus, reason appstudioshared.PromotionRunReasonType) (*appstudioshared.ApplicationPromotionRun, error) {
 
+	index := -1
+	for i, Condition := range promotionRun.Status.Conditions {
+		if Condition.Message == message {
+			index = i
+			break
+		}
+	}
+
 	now := metav1.Now()
-	promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
-		appstudioshared.PromotionRunCondition{
-			Type:               conditionType,
-			Message:            message,
-			LastProbeTime:      now,
-			LastTransitionTime: &now,
-			Status:             status,
-			Reason:             reason,
-		})
+	if index == -1 {
+		promotionRun.Status.Conditions = append(promotionRun.Status.Conditions,
+			appstudioshared.PromotionRunCondition{
+				Type:               conditionType,
+				Message:            message,
+				LastProbeTime:      now,
+				LastTransitionTime: &now,
+				Status:             status,
+				Reason:             reason,
+			})
+	} else {
+		promotionRun.Status.Conditions[index].LastProbeTime = now
+		promotionRun.Status.Conditions[index].LastTransitionTime = &now
+	}
 
 	if err := client.Status().Update(ctx, promotionRun); err != nil {
 		return promotionRun, err

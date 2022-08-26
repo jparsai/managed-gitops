@@ -208,7 +208,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(promotionRun.Status.Conditions[0].Reason).To(Equal(appstudiosharedv1.PromotionRunReasonErrorOccurred))
 		})
 
-		It("Should not support auto promo.", func() {
+		It("Should not support auto Promotion.", func() {
 			promotionRun.Spec.AutomatedPromotion.InitialEnvironment = "abc"
 			err := promotionRunReconciler.Create(ctx, promotionRun)
 			Expect(err).To(BeNil())

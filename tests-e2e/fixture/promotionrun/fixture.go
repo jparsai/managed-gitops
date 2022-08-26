@@ -43,3 +43,34 @@ func HaveStatusComplete(expectedPromotionRunStatus appstudiosharedv1.Application
 		return res
 	}, BeTrue())
 }
+
+func HaveStatusConditions(expectedPromotionRunStatusConditions appstudiosharedv1.ApplicationPromotionRunStatus) matcher.GomegaMatcher {
+	return WithTransform(func(promotionRun appstudiosharedv1.ApplicationPromotionRun) bool {
+
+		k8sClient, err := fixture.GetKubeClient()
+		if err != nil {
+			fmt.Println(k8sFixture.K8sClientError, err)
+			return false
+		}
+
+		err = k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&promotionRun), &promotionRun)
+		if err != nil {
+			fmt.Println(k8sFixture.K8sClientError, err)
+			return false
+		}
+
+		now := v1.Now()
+		promotionRun.Status.Conditions[0].LastProbeTime = now
+		promotionRun.Status.Conditions[0].LastTransitionTime = &now
+
+		expectedPromotionRunStatusConditions.Conditions[0].LastProbeTime = now
+		expectedPromotionRunStatusConditions.Conditions[0].LastTransitionTime = &now
+
+		res := reflect.DeepEqual(promotionRun.Status.Conditions, expectedPromotionRunStatusConditions.Conditions)
+
+		fmt.Println("HaveStatusComplete:", res, "/ Expected:", expectedPromotionRunStatusConditions, "/ Actual:", promotionRun.Status.Conditions)
+		GinkgoWriter.Println("HaveStatusComplete:", res, "/ Expected:", expectedPromotionRunStatusConditions, "/ Actual:", promotionRun.Status.Conditions)
+
+		return res
+	}, BeTrue())
+}

@@ -14,9 +14,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("GitOpsDeployment E2E tests", func() {
-	Context("Create a new GitOpsDeployment", func() {
-		It("should be healthy and have synced status, and resources should be deployed", func() {
+var _ = Describe("Application Promotion Run E2E Tests.", func() {
+	Context("Testing Application Promotion Run Reconciler.", func() {
+		It("Should create GitOpsDeployments and it should be Synced/Healthy.", func() {
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
 
 			environmentStage := buildEnvironmentResource("staging", "Staging Environment", "staging", appstudiosharedv1.EnvironmentType_POC)
@@ -105,6 +105,189 @@ var _ = Describe("GitOpsDeployment E2E tests", func() {
 			}
 
 			Eventually(promotionRun, "3m", "1s").Should(promotionRunFixture.HaveStatusComplete(expectedPromotionRunStatus))
+		})
+
+		It("Should not support auto Promotion.", func() {
+			Expect(fixture.EnsureCleanSlate()).To(Succeed())
+
+			environmentStage := buildEnvironmentResource("staging", "Staging Environment", "staging", appstudiosharedv1.EnvironmentType_POC)
+			err := k8s.Create(&environmentStage)
+			Expect(err).To(Succeed())
+
+			environmentProd := buildEnvironmentResource("prod", "Production Environment", "prod", appstudiosharedv1.EnvironmentType_POC)
+			err = k8s.Create(&environmentProd)
+			Expect(err).To(Succeed())
+
+			applicationSnapshot := buildApplicationSnapshotResource("my-snapshot", "new-demo-app", "Staging Snapshot", "Staging Snapshot", "component-a", "quay.io/jgwest-redhat/sample-workload:latest")
+			err = k8s.Create(&applicationSnapshot)
+			Expect(err).To(Succeed())
+
+			bindingStage := buildApplicationSnapshotEnvironmentBindingResource("appa-staging-binding", "new-demo-app", "staging", "my-snapshot", 3, []string{"component-a"})
+			err = k8s.Create(&bindingStage)
+			Expect(err).To(Succeed())
+
+			// Update Status field
+			err = k8s.Get(&bindingStage)
+			Expect(err).To(Succeed())
+			bindingStage.Status = buildApplicationSnapshotEnvironmentBindingStatus(bindingStage.Spec.Components, "https://github.com/redhat-appstudio/gitops-repository-template", "main", []string{"components/componentA/overlays/staging", "components/componentB/overlays/staging"})
+			err = k8s.UpdateStatus(&bindingStage)
+			Expect(err).To(Succeed())
+
+			bindingProd := buildApplicationSnapshotEnvironmentBindingResource("appa-prod-binding", "new-demo-app", "prod", "my-snapshot", 3, []string{"component-a"})
+			err = k8s.Create(&bindingProd)
+			Expect(err).To(Succeed())
+
+			// Update Status field
+			err = k8s.Get(&bindingProd)
+			Expect(err).To(Succeed())
+			bindingProd.Status = buildApplicationSnapshotEnvironmentBindingStatus(bindingProd.Spec.Components, "https://github.com/redhat-appstudio/gitops-repository-template", "main", []string{"components/componentA/overlays/staging", "components/componentB/overlays/staging"})
+			err = k8s.UpdateStatus(&bindingProd)
+			Expect(err).To(Succeed())
+
+			//====================================================
+			By("Verify that Status.GitOpsDeployments field of Binding is having Component and GitOpsDeployment name.")
+
+			gitOpsDeploymentNameStage := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingStage, bindingStage.Spec.Components[0].Name)
+			expectedGitOpsDeploymentsStage := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+				{ComponentName: bindingStage.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameStage},
+			}
+			Eventually(bindingStage, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsStage))
+
+			gitOpsDeploymentNameProd := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingProd, bindingProd.Spec.Components[0].Name)
+			expectedGitOpsDeploymentsProd := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+				{ComponentName: bindingProd.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameProd},
+			}
+			Eventually(bindingProd, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsProd))
+
+			gitOpsDeploymentStage := v1alpha1.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gitOpsDeploymentNameStage,
+					Namespace: bindingStage.Namespace,
+				},
+			}
+			err = k8s.Get(&gitOpsDeploymentStage)
+			Expect(err).To(Succeed())
+
+			gitOpsDeploymentProd := v1alpha1.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gitOpsDeploymentNameProd,
+					Namespace: bindingProd.Namespace,
+				},
+			}
+			err = k8s.Get(&gitOpsDeploymentProd)
+			Expect(err).To(Succeed())
+
+			promotionRun := buildPromotionRunResource("new-demo-app-manual-promotion", "new-demo-app", "my-snapshot", "prod")
+
+			promotionRun.Spec.ManualPromotion = appstudiosharedv1.ManualPromotionConfiguration{}
+			promotionRun.Spec.AutomatedPromotion = appstudiosharedv1.AutomatedPromotionConfiguration{
+				InitialEnvironment: "staging",
+			}
+			err = k8s.Create(&promotionRun)
+			Expect(err).To(Succeed())
+
+			expectedPromotionRunStatusConditions := appstudiosharedv1.ApplicationPromotionRunStatus{
+				Conditions: []appstudiosharedv1.PromotionRunCondition{
+					{
+						Type:    appstudiosharedv1.PromotionRunConditionErrorOccurred,
+						Message: "Automated promotion are not yet supported.",
+						Status:  appstudiosharedv1.PromotionRunConditionStatusFalse,
+						Reason:  appstudiosharedv1.PromotionRunReasonErrorOccurred,
+					},
+				},
+			}
+
+			Eventually(promotionRun, "3m", "1s").Should(promotionRunFixture.HaveStatusConditions(expectedPromotionRunStatusConditions))
+		})
+
+		It("Should not support invalid value for Target Environment.", func() {
+			Expect(fixture.EnsureCleanSlate()).To(Succeed())
+
+			environmentStage := buildEnvironmentResource("staging", "Staging Environment", "staging", appstudiosharedv1.EnvironmentType_POC)
+			err := k8s.Create(&environmentStage)
+			Expect(err).To(Succeed())
+
+			environmentProd := buildEnvironmentResource("prod", "Production Environment", "prod", appstudiosharedv1.EnvironmentType_POC)
+			err = k8s.Create(&environmentProd)
+			Expect(err).To(Succeed())
+
+			applicationSnapshot := buildApplicationSnapshotResource("my-snapshot", "new-demo-app", "Staging Snapshot", "Staging Snapshot", "component-a", "quay.io/jgwest-redhat/sample-workload:latest")
+			err = k8s.Create(&applicationSnapshot)
+			Expect(err).To(Succeed())
+
+			bindingStage := buildApplicationSnapshotEnvironmentBindingResource("appa-staging-binding", "new-demo-app", "staging", "my-snapshot", 3, []string{"component-a"})
+			err = k8s.Create(&bindingStage)
+			Expect(err).To(Succeed())
+
+			// Update Status field
+			err = k8s.Get(&bindingStage)
+			Expect(err).To(Succeed())
+			bindingStage.Status = buildApplicationSnapshotEnvironmentBindingStatus(bindingStage.Spec.Components, "https://github.com/redhat-appstudio/gitops-repository-template", "main", []string{"components/componentA/overlays/staging", "components/componentB/overlays/staging"})
+			err = k8s.UpdateStatus(&bindingStage)
+			Expect(err).To(Succeed())
+
+			bindingProd := buildApplicationSnapshotEnvironmentBindingResource("appa-prod-binding", "new-demo-app", "prod", "my-snapshot", 3, []string{"component-a"})
+			err = k8s.Create(&bindingProd)
+			Expect(err).To(Succeed())
+
+			// Update Status field
+			err = k8s.Get(&bindingProd)
+			Expect(err).To(Succeed())
+			bindingProd.Status = buildApplicationSnapshotEnvironmentBindingStatus(bindingProd.Spec.Components, "https://github.com/redhat-appstudio/gitops-repository-template", "main", []string{"components/componentA/overlays/staging", "components/componentB/overlays/staging"})
+			err = k8s.UpdateStatus(&bindingProd)
+			Expect(err).To(Succeed())
+
+			//====================================================
+			By("Verify that Status.GitOpsDeployments field of Binding is having Component and GitOpsDeployment name.")
+
+			gitOpsDeploymentNameStage := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingStage, bindingStage.Spec.Components[0].Name)
+			expectedGitOpsDeploymentsStage := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+				{ComponentName: bindingStage.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameStage},
+			}
+			Eventually(bindingStage, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsStage))
+
+			gitOpsDeploymentNameProd := appstudiocontroller.GenerateBindingGitOpsDeploymentName(bindingProd, bindingProd.Spec.Components[0].Name)
+			expectedGitOpsDeploymentsProd := []appstudiosharedv1.BindingStatusGitOpsDeployment{
+				{ComponentName: bindingProd.Spec.Components[0].Name, GitOpsDeployment: gitOpsDeploymentNameProd},
+			}
+			Eventually(bindingProd, "3m", "1s").Should(bindingFixture.HaveStatusGitOpsDeployments(expectedGitOpsDeploymentsProd))
+
+			gitOpsDeploymentStage := v1alpha1.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gitOpsDeploymentNameStage,
+					Namespace: bindingStage.Namespace,
+				},
+			}
+			err = k8s.Get(&gitOpsDeploymentStage)
+			Expect(err).To(Succeed())
+
+			gitOpsDeploymentProd := v1alpha1.GitOpsDeployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gitOpsDeploymentNameProd,
+					Namespace: bindingProd.Namespace,
+				},
+			}
+			err = k8s.Get(&gitOpsDeploymentProd)
+			Expect(err).To(Succeed())
+
+			promotionRun := buildPromotionRunResource("new-demo-app-manual-promotion", "new-demo-app", "my-snapshot", "prod")
+			promotionRun.Spec.ManualPromotion.TargetEnvironment = ""
+
+			err = k8s.Create(&promotionRun)
+			Expect(err).To(Succeed())
+
+			expectedPromotionRunStatusConditions := appstudiosharedv1.ApplicationPromotionRunStatus{
+				Conditions: []appstudiosharedv1.PromotionRunCondition{
+					{
+						Type:    appstudiosharedv1.PromotionRunConditionErrorOccurred,
+						Message: "Target Environment has invalid value.",
+						Status:  appstudiosharedv1.PromotionRunConditionStatusFalse,
+						Reason:  appstudiosharedv1.PromotionRunReasonErrorOccurred,
+					},
+				},
+			}
+
+			Eventually(promotionRun, "3m", "1s").Should(promotionRunFixture.HaveStatusConditions(expectedPromotionRunStatusConditions))
 		})
 	})
 })
