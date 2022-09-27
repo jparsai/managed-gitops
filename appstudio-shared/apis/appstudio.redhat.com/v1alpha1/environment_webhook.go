@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -54,6 +56,7 @@ var _ webhook.Validator = &Environment{}
 func (r *Environment) ValidateCreate() error {
 	environmentlog.Info("validate create", "name", r.Name)
 
+	fmt.Println("1....#########################################")
 	// TODO(user): fill in your validation logic upon object creation.
 	return nil
 }
@@ -62,6 +65,7 @@ func (r *Environment) ValidateCreate() error {
 func (r *Environment) ValidateUpdate(old runtime.Object) error {
 	environmentlog.Info("validate update", "name", r.Name)
 
+	fmt.Println("2....#########################################")
 	// TODO(user): fill in your validation logic upon object update.
 	return nil
 }
@@ -70,6 +74,7 @@ func (r *Environment) ValidateUpdate(old runtime.Object) error {
 func (r *Environment) ValidateDelete() error {
 	environmentlog.Info("validate delete", "name", r.Name)
 
+	fmt.Println("3....#########################################")
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil
 }

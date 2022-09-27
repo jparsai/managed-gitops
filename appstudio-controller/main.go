@@ -136,6 +136,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
 	if err = (&appstudioshared.Environment{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Environment")
 		os.Exit(1)

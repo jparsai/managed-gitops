@@ -4,6 +4,8 @@ TAG ?= latest
 BASE_IMAGE ?= gitops-service
 USERNAME ?= redhat-appstudio
 IMG ?= quay.io/${USERNAME}/${BASE_IMAGE}:${TAG}
+CERT_MANAGER_VERSION ?= v1.6.1
+ENABLE_WEBHOOKS ?= true
 
 # Default values match the their respective deployments in staging/production environment for GitOps Service, otherwise the E2E will fail.
 ARGO_CD_NAMESPACE ?= gitops-service-argocd
@@ -190,10 +192,19 @@ clean: ## remove the bin and vendor folders from each component
 build: build-backend build-cluster-agent build-appstudio-controller ## Build all the components - note: you do not need to do this before running start
 
 docker-build: ## Build docker image -- note: you have to change the USERNAME var. Optionally change the BASE_IMAGE or TAG
-	docker build -t ${IMG} $(MAKEFILE_ROOT)
+	docker build --build-arg ENABLE_WEBHOOKS=${ENABLE_WEBHOOKS} -t ${IMG} $(MAKEFILE_ROOT)
 
 docker-push: ## Push docker image - note: you have to change the USERNAME var. Optionally change the BASE_IMAGE or TAG
 	docker push ${IMG}
+
+install-cert: ## Install cert manager for webhooks
+	kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
+
+uninstall-cert:
+	kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
+
+install: manifests kustomize install-cert ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 test: test-backend test-backend-shared test-cluster-agent test-appstudio-controller ## Run tests for all components
 
