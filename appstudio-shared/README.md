@@ -27,9 +27,9 @@ To generate a controller for one or more of these APIs, run these commands in yo
 ```bash
 # Tested on operator-sdk v1.17 - the commands may require minor adjustment if you are using a different version:
 
-operator-sdk create api --group appstudio --version v1alpha1 --kind ApplicationSnapshot --controller
-operator-sdk create api --group appstudio --version v1alpha1 --kind ApplicationPromotionRun --controller
-operator-sdk create api --group appstudio --version v1alpha1 --kind ApplicationSnapshotEnvironmentBinding --controller
+operator-sdk create api --group appstudio --version v1alpha1 --kind Snapshot --controller
+operator-sdk create api --group appstudio --version v1alpha1 --kind PromotionRun --controller
+operator-sdk create api --group appstudio --version v1alpha1 --kind SnapshotEnvironmentBinding --controller
 operator-sdk create api --group appstudio --version v1alpha1 --kind Environment --controller
 
 # In all cases, answer `N` to the `Create Resource [y/n]` prompt from operator-sdk CLI.
