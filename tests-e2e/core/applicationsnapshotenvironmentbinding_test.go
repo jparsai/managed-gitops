@@ -435,14 +435,14 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler E2E tests", f
 
 })
 
-func buildApplicationSnapshotEnvironmentBindingResource(name, appName, envName, snapShotName string, replica int, componentNames []string) appstudiosharedv1.ApplicationSnapshotEnvironmentBinding {
+func buildApplicationSnapshotEnvironmentBindingResource(name, appName, envName, snapShotName string, replica int, componentNames []string) appstudiosharedv1.SnapshotEnvironmentBinding {
 	// Create ApplicationSnapshotEnvironmentBinding CR.
-	binding := appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{
+	binding := appstudiosharedv1.SnapshotEnvironmentBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: fixture.GitOpsServiceE2ENamespace,
 		},
-		Spec: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingSpec{
+		Spec: appstudiosharedv1.SnapshotEnvironmentBindingSpec{
 			Application: appName,
 			Environment: envName,
 			Snapshot:    snapShotName,
@@ -462,10 +462,10 @@ func buildApplicationSnapshotEnvironmentBindingResource(name, appName, envName, 
 }
 
 func buildApplicationSnapshotEnvironmentBindingStatus(components []appstudiosharedv1.BindingComponent, url,
-	branch, commitID string, path []string) appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus {
+	branch, commitID string, path []string) appstudiosharedv1.SnapshotEnvironmentBindingStatus {
 
 	// Create ApplicationSnapshotEnvironmentBindingStatus object.
-	status := appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{}
+	status := appstudiosharedv1.SnapshotEnvironmentBindingStatus{}
 
 	componentStatus := []appstudiosharedv1.ComponentStatus{}
 
