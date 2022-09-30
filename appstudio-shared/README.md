@@ -7,8 +7,7 @@ The APIs defined in this module is based on the [Environment API discussions](ht
 
 ⚠️ Until these APIs are stabilized, they are subject to change with limited notice. Best efforts will be made to inform API consumers of how to migrate when the changes are breaking. ⚠️
 
-### Expected upcoming changes, as of this writing (May 2022):
-- Drop the `Application-` prefix for prefixed resources
+### Expected upcoming changes, as of this writing (Sep 2022):
 - Move away from using the `Snapshot` noun (replacement TBD)
 - Consider moving this module out of the GitOps Service monorepo and into its own Git repository
 
