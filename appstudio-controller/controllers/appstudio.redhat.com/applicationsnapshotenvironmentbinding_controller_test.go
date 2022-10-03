@@ -23,7 +23,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 	Context("Testing ApplicationSnapshotEnvironmentBindingReconciler.", func() {
 		var ctx context.Context
 		var request reconcile.Request
-		var binding *appstudiosharedv1.ApplicationSnapshotEnvironmentBinding
+		var binding *appstudiosharedv1.SnapshotEnvironmentBinding
 		var bindingReconciler ApplicationSnapshotEnvironmentBindingReconciler
 
 		var environment appstudiosharedv1.Environment
@@ -68,7 +68,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			bindingReconciler = ApplicationSnapshotEnvironmentBindingReconciler{Client: k8sClient, Scheme: scheme}
 
 			// Create ApplicationSnapshotEnvironmentBinding CR.
-			binding = &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{
+			binding = &appstudiosharedv1.SnapshotEnvironmentBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "appa-staging-binding",
 					Namespace: apiNamespace.Name,
@@ -77,7 +77,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 						"appstudio.environment": "staging",
 					},
 				},
-				Spec: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingSpec{
+				Spec: appstudiosharedv1.SnapshotEnvironmentBindingSpec{
 					Application: "new-demo-app",
 					Environment: "staging",
 					Snapshot:    "my-snapshot",
@@ -93,7 +93,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 						},
 					},
 				},
-				Status: appstudiosharedv1.ApplicationSnapshotEnvironmentBindingStatus{
+				Status: appstudiosharedv1.SnapshotEnvironmentBindingStatus{
 					Components: []appstudiosharedv1.ComponentStatus{
 						{
 							Name: "component-a",
@@ -117,7 +117,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(err).To(BeNil())
 
 			// Check status field before calling Reconciler
-			bindingFirst := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{}
+			bindingFirst := &appstudiosharedv1.SnapshotEnvironmentBinding{}
 			err = bindingReconciler.Client.Get(ctx, request.NamespacedName, bindingFirst)
 			Expect(err).To(BeNil())
 			Expect(len(bindingFirst.Status.GitOpsDeployments)).To(Equal(0))
@@ -127,7 +127,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(err).To(BeNil())
 
 			// Check status field after calling Reconciler
-			bindingSecond := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{}
+			bindingSecond := &appstudiosharedv1.SnapshotEnvironmentBinding{}
 			err = bindingReconciler.Client.Get(ctx, request.NamespacedName, bindingSecond)
 
 			Expect(err).To(BeNil())
@@ -226,7 +226,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			Expect(err).To(BeNil())
 
 			// Check status field after calling Reconciler
-			binding := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{}
+			binding := &appstudiosharedv1.SnapshotEnvironmentBinding{}
 			err = bindingReconciler.Client.Get(ctx, request.NamespacedName, binding)
 
 			Expect(err).To(BeNil())

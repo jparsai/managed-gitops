@@ -58,7 +58,7 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.
 	log := log.FromContext(ctx).WithValues("name", req.Name, "namespace", req.Namespace)
 	defer log.V(sharedutil.LogLevel_Debug).Info("Application Snapshot Environment Binding Reconcile() complete.")
 
-	binding := &appstudioshared.ApplicationSnapshotEnvironmentBinding{}
+	binding := &appstudioshared.SnapshotEnvironmentBinding{}
 
 	if err := r.Client.Get(ctx, req.NamespacedName, binding); err != nil {
 		// Binding doesn't exist: it was deleted.
@@ -177,7 +177,7 @@ const (
 
 // processExpectedGitOpsDeployment processed the GitOpsDeployment that is expected for a particular Component
 func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployment apibackend.GitOpsDeployment,
-	binding appstudioshared.ApplicationSnapshotEnvironmentBinding, k8sClient client.Client) error {
+	binding appstudioshared.SnapshotEnvironmentBinding, k8sClient client.Client) error {
 
 	log := log.FromContext(ctx).WithValues("binding", binding.Name, "gitOpsDeployment", expectedGitopsDeployment.Name, "namespace", binding.Namespace)
 	actualGitOpsDeployment := apibackend.GitOpsDeployment{}
@@ -216,7 +216,7 @@ func processExpectedGitOpsDeployment(ctx context.Context, expectedGitopsDeployme
 }
 
 // GenerateBindingGitOpsDeploymentName generates the name that will be used for a given GitOpsDeployment of a binding
-func GenerateBindingGitOpsDeploymentName(binding appstudioshared.ApplicationSnapshotEnvironmentBinding, componentName string) string {
+func GenerateBindingGitOpsDeploymentName(binding appstudioshared.SnapshotEnvironmentBinding, componentName string) string {
 
 	expectedName := binding.Name + "-" + binding.Spec.Application + "-" + binding.Spec.Environment + "-" + componentName
 
@@ -231,7 +231,7 @@ func GenerateBindingGitOpsDeploymentName(binding appstudioshared.ApplicationSnap
 }
 
 func generateExpectedGitOpsDeployment(component appstudioshared.ComponentStatus,
-	binding appstudioshared.ApplicationSnapshotEnvironmentBinding, environment appstudioshared.Environment) (apibackend.GitOpsDeployment, error) {
+	binding appstudioshared.SnapshotEnvironmentBinding, environment appstudioshared.Environment) (apibackend.GitOpsDeployment, error) {
 
 	res := apibackend.GitOpsDeployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -279,7 +279,7 @@ func generateExpectedGitOpsDeployment(component appstudioshared.ComponentStatus,
 func (r *ApplicationSnapshotEnvironmentBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		For(&appstudioshared.ApplicationSnapshotEnvironmentBinding{}).
+		For(&appstudioshared.SnapshotEnvironmentBinding{}).
 		Owns(&apibackend.GitOpsDeployment{}).
 		Complete(r)
 }
