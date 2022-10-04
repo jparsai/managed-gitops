@@ -62,6 +62,6 @@ func (r *ApplicationSnapshotReconciler) Reconcile(ctx context.Context, req ctrl.
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationSnapshotReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appstudioshared.ApplicationSnapshot{}).
+		For(&appstudioshared.Snapshot{}).
 		Complete(r)
 }
