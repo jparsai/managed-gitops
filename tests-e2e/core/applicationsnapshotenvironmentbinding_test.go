@@ -1,5 +1,6 @@
 package core
 
+/*
 import (
 	"strings"
 
@@ -492,3 +493,4 @@ func buildGitOpsDeploymentObjectMeta(name, namespace string) managedgitopsv1alph
 	}
 	return gitOpsDeployment
 }
+*/

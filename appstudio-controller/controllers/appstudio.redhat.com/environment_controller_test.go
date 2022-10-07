@@ -5,8 +5,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appstudiocontrollerv1 "github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1"
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
+
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/tests"
 
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
@@ -70,20 +72,20 @@ var _ = Describe("Environment controller tests", func() {
 			err = k8sClient.Create(ctx, &secret)
 			Expect(err).To(BeNil())
 
-			env := appstudioshared.Environment{
+			env := appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-env",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudioshared.EnvironmentSpec{
-					Type:               appstudioshared.EnvironmentType_POC,
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
 					DisplayName:        "my-environment",
-					DeploymentStrategy: appstudioshared.DeploymentStrategy_Manual,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_Manual,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudioshared.EnvironmentConfiguration{},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
-						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
+					UnstableConfigurationFields: &appstudiocontrollerv1.UnstableEnvironmentConfiguration{
+						KubernetesClusterCredentials: appstudiocontrollerv1.KubernetesClusterCredentials{
 							TargetNamespace:          "my-target-namespace",
 							APIURL:                   "https://my-api-url",
 							ClusterCredentialsSecret: secret.Name,
@@ -151,20 +153,20 @@ var _ = Describe("Environment controller tests", func() {
 			Expect(err).To(BeNil())
 
 			By("creating an Environment pointing to the first secret")
-			env := appstudioshared.Environment{
+			env := appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-env",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudioshared.EnvironmentSpec{
-					Type:               appstudioshared.EnvironmentType_POC,
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
 					DisplayName:        "my-environment",
-					DeploymentStrategy: appstudioshared.DeploymentStrategy_Manual,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_Manual,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudioshared.EnvironmentConfiguration{},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
-						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
+					UnstableConfigurationFields: &appstudiocontrollerv1.UnstableEnvironmentConfiguration{
+						KubernetesClusterCredentials: appstudiocontrollerv1.KubernetesClusterCredentials{
 							TargetNamespace:          "my-target-namespace",
 							APIURL:                   "https://my-api-url",
 							ClusterCredentialsSecret: secret2.Name,
@@ -231,20 +233,20 @@ var _ = Describe("Environment controller tests", func() {
 		It("should return an error if the Environment references a Secret that doesn't exist", func() {
 
 			By("creating an Environment resource pointing to a Secret that doesn't exist")
-			env := appstudioshared.Environment{
+			env := appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-env",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudioshared.EnvironmentSpec{
-					Type:               appstudioshared.EnvironmentType_POC,
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
 					DisplayName:        "my-environment",
-					DeploymentStrategy: appstudioshared.DeploymentStrategy_Manual,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_Manual,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudioshared.EnvironmentConfiguration{},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
-						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
+					UnstableConfigurationFields: &appstudiocontrollerv1.UnstableEnvironmentConfiguration{
+						KubernetesClusterCredentials: appstudiocontrollerv1.KubernetesClusterCredentials{
 							TargetNamespace:          "my-target-namespace",
 							APIURL:                   "https://my-api-url",
 							ClusterCredentialsSecret: "secret-that-doesnt-exist",
@@ -269,18 +271,18 @@ var _ = Describe("Environment controller tests", func() {
 		It("should not return an error if the Environment does not container UnstableConfigurationFields", func() {
 
 			By("creating an Environment resource pointing to a Secret that doesn't exist")
-			env := appstudioshared.Environment{
+			env := appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-env",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudioshared.EnvironmentSpec{
-					Type:               appstudioshared.EnvironmentType_POC,
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
 					DisplayName:        "my-environment",
-					DeploymentStrategy: appstudioshared.DeploymentStrategy_Manual,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_Manual,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudioshared.EnvironmentConfiguration{},
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
 				},
 			}
 			err := k8sClient.Create(ctx, &env)
@@ -316,20 +318,20 @@ var _ = Describe("Environment controller tests", func() {
 			Expect(err).To(BeNil())
 
 			By("creating an Environment resource pointing with an invalid target namespace field")
-			env := appstudioshared.Environment{
+			env := appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-env",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudioshared.EnvironmentSpec{
-					Type:               appstudioshared.EnvironmentType_POC,
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
 					DisplayName:        "my-environment",
-					DeploymentStrategy: appstudioshared.DeploymentStrategy_Manual,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_Manual,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudioshared.EnvironmentConfiguration{},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
-						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
+					UnstableConfigurationFields: &appstudiocontrollerv1.UnstableEnvironmentConfiguration{
+						KubernetesClusterCredentials: appstudiocontrollerv1.KubernetesClusterCredentials{
 							TargetNamespace:          "",
 							APIURL:                   "https://my-api-url",
 							ClusterCredentialsSecret: "my-secret",

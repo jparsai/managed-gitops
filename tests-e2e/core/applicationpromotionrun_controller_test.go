@@ -1,5 +1,6 @@
 package core
 
+/*
 import (
 	"context"
 	"os"
@@ -297,3 +298,4 @@ func buildPromotionRunResource(name, appName, snapshotName, targetEnvironment st
 	}
 	return promotionRun
 }
+*/

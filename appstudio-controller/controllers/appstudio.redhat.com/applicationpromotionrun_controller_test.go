@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	appstudiocontrollerv1 "github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1"
 	appstudiosharedv1 "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	apibackend "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/tests"
@@ -23,7 +24,7 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 
 		var ctx context.Context
 		var request reconcile.Request
-		var environment appstudiosharedv1.Environment
+		var environment appstudiocontrollerv1.Environment
 		var promotionRun *appstudiosharedv1.ApplicationPromotionRun
 		var promotionRunReconciler ApplicationPromotionRunReconciler
 
@@ -47,18 +48,18 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 				Build()
 
 			By("Create placeholder environment.")
-			environment = appstudiosharedv1.Environment{
+			environment = appstudiocontrollerv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "prod",
 					Namespace: apiNamespace.Name,
 				},
-				Spec: appstudiosharedv1.EnvironmentSpec{
+				Spec: appstudiocontrollerv1.EnvironmentSpec{
 					DisplayName:        "my-environment",
-					Type:               appstudiosharedv1.EnvironmentType_POC,
-					DeploymentStrategy: appstudiosharedv1.DeploymentStrategy_AppStudioAutomated,
+					Type:               appstudiocontrollerv1.EnvironmentType_POC,
+					DeploymentStrategy: appstudiocontrollerv1.DeploymentStrategy_AppStudioAutomated,
 					ParentEnvironment:  "",
 					Tags:               []string{},
-					Configuration:      appstudiosharedv1.EnvironmentConfiguration{},
+					Configuration:      appstudiocontrollerv1.EnvironmentConfiguration{},
 				},
 			}
 			err = k8sClient.Create(ctx, &environment)

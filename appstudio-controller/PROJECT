@@ -32,5 +32,10 @@ resources:
   domain: redhat.com
   group: appstudio.redhat.com
   kind: Environment
+  path: github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1
   version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 version: "3"
