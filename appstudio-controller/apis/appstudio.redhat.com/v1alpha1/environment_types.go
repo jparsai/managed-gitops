@@ -16,7 +16,6 @@ limitations under the License.
 
 package v1alpha1
 
-/*
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -138,7 +137,16 @@ type EnvironmentList struct {
 	Items           []Environment `json:"items"`
 }
 
+// EnvVarPair describes environment variables to use for the component
+type EnvVarPair struct {
+
+	// Name is the environment variable name
+	Name string `json:"name"`
+
+	// Value is the environment variable value
+	Value string `json:"value"`
+}
+
 func init() {
 	SchemeBuilder.Register(&Environment{}, &EnvironmentList{})
 }
-*/

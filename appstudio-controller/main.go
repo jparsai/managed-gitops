@@ -34,8 +34,10 @@ import (
 	applicationv1alpha1 "github.com/redhat-appstudio/application-service/api/v1alpha1"
 	gitopsdeploymentv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 
-	appstudioredhatcomcontrollers "github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/appstudio.redhat.com"
+	appstudiocontrollerv1 "github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1"
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
+
+	appstudioredhatcomcontrollers "github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/appstudio.redhat.com"
 
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	//+kubebuilder:scaffold:imports
@@ -52,6 +54,7 @@ func init() {
 	// utilruntime.Must(managedgitopsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(gitopsdeploymentv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(appstudioshared.AddToScheme(scheme))
+	utilruntime.Must(appstudiocontrollerv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -132,6 +135,10 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Environment")
+		os.Exit(1)
+	}
+	if err = (&appstudiocontrollerv1.Environment{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "Environment")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

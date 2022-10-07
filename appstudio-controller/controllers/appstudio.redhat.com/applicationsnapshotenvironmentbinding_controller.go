@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/kcp-dev/logicalcluster/v2"
+	appstudiocontrollerv1 "github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1"
+
 	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
 	apibackend "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
@@ -66,7 +68,7 @@ func (r *ApplicationSnapshotEnvironmentBindingReconciler) Reconcile(ctx context.
 		return ctrl.Result{}, nil
 	}
 
-	environment := appstudioshared.Environment{
+	environment := appstudiocontrollerv1.Environment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      binding.Spec.Environment,
 			Namespace: req.Namespace,
@@ -231,7 +233,7 @@ func GenerateBindingGitOpsDeploymentName(binding appstudioshared.ApplicationSnap
 }
 
 func generateExpectedGitOpsDeployment(component appstudioshared.ComponentStatus,
-	binding appstudioshared.ApplicationSnapshotEnvironmentBinding, environment appstudioshared.Environment) (apibackend.GitOpsDeployment, error) {
+	binding appstudioshared.ApplicationSnapshotEnvironmentBinding, environment appstudiocontrollerv1.Environment) (apibackend.GitOpsDeployment, error) {
 
 	res := apibackend.GitOpsDeployment{
 		ObjectMeta: metav1.ObjectMeta{

@@ -24,7 +24,7 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 
-	appstudioshared "github.com/redhat-appstudio/managed-gitops/appstudio-shared/apis/appstudio.redhat.com/v1alpha1"
+	appstudiocontrollerv1 "github.com/redhat-appstudio/managed-gitops/appstudio-controller/apis/appstudio.redhat.com/v1alpha1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 
@@ -60,7 +60,7 @@ func (r *EnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The goal of this function is to ensure that if an Environment exists, and that Environment
 	// has the 'kubernetesCredentials' field defined, that a corresponding
 	// GitOpsDeploymentManagedEnvironment exists (and is up-to-date).
-	environment := &appstudioshared.Environment{
+	environment := &appstudiocontrollerv1.Environment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
@@ -151,7 +151,7 @@ func (r *EnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // 	}
 // }
 
-func generateDesiredResource(ctx context.Context, env appstudioshared.Environment, k8sClient client.Client) (*managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment, error) {
+func generateDesiredResource(ctx context.Context, env appstudiocontrollerv1.Environment, k8sClient client.Client) (*managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment, error) {
 
 	// Don't process the Environment configuration fields if they are empty
 	if env.Spec.UnstableConfigurationFields == nil {
@@ -203,6 +203,6 @@ func generateEmptyManagedEnvironment(environmentName string, environmentNamespac
 // SetupWithManager sets up the controller with the Manager.
 func (r *EnvironmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appstudioshared.Environment{}).
+		For(&appstudiocontrollerv1.Environment{}).
 		Complete(r)
 }
