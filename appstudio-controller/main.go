@@ -134,6 +134,20 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Environment")
 		os.Exit(1)
 	}
+
+	if err = (&appstudioshared.ApplicationSnapshotEnvironmentBinding{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ApplicationSnapshotEnvironmentBinding")
+		os.Exit(1)
+	}
+	if err = (&appstudioshared.ApplicationSnapshot{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ApplicationSnapshot")
+		os.Exit(1)
+	}
+	if err = (&appstudioshared.ApplicationPromotionRun{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ApplicationPromotionRun")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
