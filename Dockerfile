@@ -8,6 +8,9 @@ ARG BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-minimal:8.5-218
 ################################################################################################
 FROM golang:1.18 as builder
 
+ARG ENABLE_WEBHOOKS=true
+ENV ENABLE_WEBHOOKS=${ENABLE_WEBHOOKS}
+
 WORKDIR /workspace
 
 COPY Makefile ./Makefile

@@ -11,7 +11,7 @@ resources:
 patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
-#- patches/webhook_in_environments.yaml
+- patches/webhook_in_environments.yaml
 #- patches/webhook_in_applicationsnapshotenvironmentbindings.yaml
 #- patches/webhook_in_applicationsnapshots.yaml
 #- patches/webhook_in_applicationpromotionruns.yaml
