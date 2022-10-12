@@ -1,0 +1,134 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-appstudio-redhat-com-redhat-com-v1alpha1-applicationpromotionrun
+  failurePolicy: Fail
+  name: mapplicationpromotionrun.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationpromotionruns
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-appstudio-redhat-com-redhat-com-v1alpha1-applicationsnapshot
+  failurePolicy: Fail
+  name: mapplicationsnapshot.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationsnapshots
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-appstudio-redhat-com-redhat-com-v1alpha1-applicationsnapshotenvironmentbinding
+  failurePolicy: Fail
+  name: mapplicationsnapshotenvironmentbinding.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationsnapshotenvironmentbindings
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-appstudio-redhat-com-redhat-com-v1alpha1-applicationpromotionrun
+  failurePolicy: Fail
+  name: vapplicationpromotionrun.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationpromotionruns
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-appstudio-redhat-com-redhat-com-v1alpha1-applicationsnapshot
+  failurePolicy: Fail
+  name: vapplicationsnapshot.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationsnapshots
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-appstudio-redhat-com-redhat-com-v1alpha1-applicationsnapshotenvironmentbinding
+  failurePolicy: Fail
+  name: vapplicationsnapshotenvironmentbinding.kb.io
+  rules:
+  - apiGroups:
+    - appstudio.redhat.com.redhat.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - applicationsnapshotenvironmentbindings
+  sideEffects: None

@@ -39,6 +39,7 @@
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
+CERT_MANAGER_VERSION ?= v1.8.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -115,6 +116,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 #	docker push ${IMG}
 
 ##@ Deployment
+
+install-cert: ## Install cert manager for webhooks
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
+
+uninstall-cert:
+	kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
 
 ifndef ignore-not-found
   ignore-not-found = false
