@@ -2,6 +2,8 @@ package appstudioredhatcom
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -236,6 +238,41 @@ var _ = Describe("ApplicationSnapshotEnvironmentBinding Reconciler Tests", func(
 			// GitOpsDeployment should have short name
 			Expect(binding.Status.GitOpsDeployments[0].GitOpsDeployment).
 				To(Equal(binding.Name + "-" + binding.Spec.Components[0].Name))
+		})
+
+		It("Should use short name with hash value for GitOpsDeployment, if combination of Binding name and Component name is still longer than 250 characters.", func() {
+			compName := strings.Repeat("abcde", 50)
+
+			// Update application name to exceed the limit
+			binding.Status.Components[0].Name = compName
+			request = newRequest(binding.Namespace, binding.Name)
+
+			// Create ApplicationSnapshotEnvironmentBinding CR in cluster.
+			err := bindingReconciler.Create(ctx, binding)
+			Expect(err).To(BeNil())
+
+			// Trigger Reconciler
+			_, err = bindingReconciler.Reconcile(ctx, request)
+			Expect(err).To(BeNil())
+
+			// Check status field after calling Reconciler
+			binding := &appstudiosharedv1.ApplicationSnapshotEnvironmentBinding{}
+			err = bindingReconciler.Client.Get(ctx, request.NamespacedName, binding)
+
+			Expect(err).To(BeNil())
+			Expect(len(binding.Status.GitOpsDeployments)).NotTo(Equal(0))
+
+			// 210 (First 210 characters of combination of Binding name and Component name) + 1 ("-")+32 (length of UUID) = 243 (Total length)
+			Expect(len(binding.Status.GitOpsDeployments[0].GitOpsDeployment)).To(Equal(243))
+
+			// Get the short name with hash value.
+			hasher := md5.New()
+			hasher.Write([]byte(binding.Name + "-" + binding.Spec.Application + "-" + binding.Spec.Environment + "-" + compName))
+			hashValue := hex.EncodeToString(hasher.Sum(nil))
+			expectedName := (binding.Name + "-" + compName)[0:210] + "-" + hashValue
+
+			Expect(binding.Status.GitOpsDeployments[0].GitOpsDeployment).
+				To(Equal(expectedName))
 		})
 
 		It("Should not return error if Status.Components is not available in Binding object.", func() {
