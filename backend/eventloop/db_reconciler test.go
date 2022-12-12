@@ -33,8 +33,6 @@ var _ = Describe("DB Reconciler Test", func() {
 		var gitopsDepl managedgitopsv1alpha1.GitOpsDeployment
 		var deploymentToApplicationMapping db.DeploymentToApplicationMapping
 
-		// Start the workspace event loop using single ApplicationEventLoopFactory object,
-		// this way all tests can keep track of number of event loops created by other tests.
 		BeforeEach(func() {
 			scheme,
 				argocdNamespace,
@@ -196,17 +194,17 @@ var _ = Describe("DB Reconciler Test", func() {
 					By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
 
 					err = dbq.GetApplicationStateById(ctx, &applicationStateOne)
-					Expect(err).NotTo(BeNil())
+					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 
 					err = dbq.GetSyncOperationById(ctx, &syncOperationOne)
 					Expect(err).To(BeNil())
 					Expect(syncOperationOne.Application_id).To(BeEmpty())
 
 					err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMappingOne)
-					Expect(err).NotTo(BeNil())
+					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 
 					err = dbq.GetApplicationById(ctx, &applicationOne)
-					Expect(err).NotTo(BeNil())
+					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 				})
 			})
 		})

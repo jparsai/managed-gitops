@@ -13,21 +13,22 @@ func generateUuid() string {
 	return uuid.New().String()
 }
 
-// Create entry for Application and DeploymentToApplicationMapping tables
-func createAppAndDtamEntry(ctx context.Context, dbq db.AllDatabaseQueries, application *db.Application, deploymentToApplicationMapping *db.DeploymentToApplicationMapping) {
-	application.Application_id = "test-app-" + generateUuid()
-	application.Name = "test-app-" + generateUuid()
-	err := dbq.CreateApplication(ctx, application)
-	Expect(err).To(BeNil())
-
-	deploymentToApplicationMapping.Deploymenttoapplicationmapping_uid_id = "test-" + generateUuid()
-	deploymentToApplicationMapping.Application_id = application.Application_id
-	err = dbq.CreateDeploymentToApplicationMapping(ctx, deploymentToApplicationMapping)
-	Expect(err).To(BeNil())
-}
-
 var _ = Describe("DeploymentToApplicationMapping Tests", func() {
 	Context("It should execute all DeploymentToApplicationMapping Functions", func() {
+
+		// Create entry for Application and DeploymentToApplicationMapping tables
+		createAppAndDtamEntry := func(ctx context.Context, dbq db.AllDatabaseQueries, application *db.Application, deploymentToApplicationMapping *db.DeploymentToApplicationMapping) {
+			application.Application_id = "test-app-" + generateUuid()
+			application.Name = "test-app-" + generateUuid()
+			err := dbq.CreateApplication(ctx, application)
+			Expect(err).To(BeNil())
+
+			deploymentToApplicationMapping.Deploymenttoapplicationmapping_uid_id = "test-" + generateUuid()
+			deploymentToApplicationMapping.Application_id = application.Application_id
+			err = dbq.CreateDeploymentToApplicationMapping(ctx, deploymentToApplicationMapping)
+			Expect(err).To(BeNil())
+		}
+
 		var ctx context.Context
 		var dbq db.AllDatabaseQueries
 		var application *db.Application
