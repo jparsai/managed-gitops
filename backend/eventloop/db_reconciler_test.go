@@ -241,165 +241,331 @@ var _ = Describe("DB Reconciler Test", func() {
 	})
 
 	Context("Testing Reconcile for APICRToDBMapping table entries.", func() {
+		Context("Testing Reconcile for APICRToDBMapping table entries of ManagedEnvironment CR.", func() {
+			var log logr.Logger
+			var ctx context.Context
+			var dbq db.AllDatabaseQueries
+			var k8sClient client.WithWatch
+			var clusterCredentials db.ClusterCredentials
+			var managedEnvironment db.ManagedEnvironment
+			var apiCRToDatabaseMapping db.APICRToDatabaseMapping
 
-		var log logr.Logger
-		var ctx context.Context
-		var dbq db.AllDatabaseQueries
-		var k8sClient client.WithWatch
-		var clusterCredentials db.ClusterCredentials
-		var managedEnvironment db.ManagedEnvironment
-		var apiCRToDatabaseMapping db.APICRToDatabaseMapping
+			BeforeEach(func() {
+				scheme,
+					argocdNamespace,
+					kubesystemNamespace,
+					apiNamespace,
+					err := tests.GenericTestSetup()
+				Expect(err).To(BeNil())
 
-		BeforeEach(func() {
-			scheme,
-				argocdNamespace,
-				kubesystemNamespace,
-				apiNamespace,
-				err := tests.GenericTestSetup()
-			Expect(err).To(BeNil())
+				// Create fake client
+				k8sClient = fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
+					Build()
 
-			// Create fake client
-			k8sClient = fake.NewClientBuilder().
-				WithScheme(scheme).
-				WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
-				Build()
+				err = db.SetupForTestingDBGinkgo()
+				Expect(err).To(BeNil())
 
-			err = db.SetupForTestingDBGinkgo()
-			Expect(err).To(BeNil())
+				ctx = context.Background()
+				log = logger.FromContext(ctx)
+				dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+				Expect(err).To(BeNil())
 
-			ctx = context.Background()
-			log = logger.FromContext(ctx)
-			dbq, err = db.NewUnsafePostgresDBQueries(true, true)
-			Expect(err).To(BeNil())
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-managed-env-secret",
+						Namespace: "test-k8s-namespace",
+					},
+					Type:       "managed-gitops.redhat.com/managed-environment",
+					StringData: map[string]string{"kubeconfig": "abc"},
+				}
 
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "my-managed-env-secret",
-					Namespace: "test-k8s-namespace",
-				},
-				Type:       "managed-gitops.redhat.com/managed-environment",
-				StringData: map[string]string{"kubeconfig": "abc"},
-			}
+				err = k8sClient.Create(context.Background(), secret)
+				Expect(err).To(BeNil())
 
-			err = k8sClient.Create(context.Background(), secret)
-			Expect(err).To(BeNil())
+				managedEnv := &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-env-" + string(uuid.NewUUID()),
+						Namespace: "test-k8s-namespace",
+						UID:       uuid.NewUUID(),
+					},
+					Spec: managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
+						APIURL:                     "",
+						ClusterCredentialsSecret:   secret.Name,
+						AllowInsecureSkipTLSVerify: true,
+					},
+				}
 
-			managedEnv := &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-env-" + string(uuid.NewUUID()),
-					Namespace: "test-k8s-namespace",
-					UID:       uuid.NewUUID(),
-				},
-				Spec: managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
-					APIURL:                     "",
-					ClusterCredentialsSecret:   secret.Name,
-					AllowInsecureSkipTLSVerify: true,
-				},
-			}
+				err = k8sClient.Create(context.Background(), managedEnv)
+				Expect(err).To(BeNil())
 
-			err = k8sClient.Create(context.Background(), managedEnv)
-			Expect(err).To(BeNil())
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: managedEnv.Name, Namespace: managedEnv.Namespace}, managedEnv)
+				Expect(err).To(BeNil())
 
-			err = k8sClient.Get(context.Background(), types.NamespacedName{Name: managedEnv.Name, Namespace: managedEnv.Namespace}, managedEnv)
-			Expect(err).To(BeNil())
+				clusterCredentials = db.ClusterCredentials{
+					Clustercredentials_cred_id:  "test-" + string(uuid.NewUUID()),
+					Host:                        "host",
+					Kube_config:                 "kube-config",
+					Kube_config_context:         "kube-config-context",
+					Serviceaccount_bearer_token: "serviceaccount_bearer_token",
+					Serviceaccount_ns:           "Serviceaccount_ns",
+				}
 
-			clusterCredentials = db.ClusterCredentials{
-				Clustercredentials_cred_id:  "test-" + string(uuid.NewUUID()),
-				Host:                        "host",
-				Kube_config:                 "kube-config",
-				Kube_config_context:         "kube-config-context",
-				Serviceaccount_bearer_token: "serviceaccount_bearer_token",
-				Serviceaccount_ns:           "Serviceaccount_ns",
-			}
+				err = dbq.CreateClusterCredentials(ctx, &clusterCredentials)
+				Expect(err).To(BeNil())
 
-			err = dbq.CreateClusterCredentials(ctx, &clusterCredentials)
-			Expect(err).To(BeNil())
+				managedEnvironment = db.ManagedEnvironment{
+					Managedenvironment_id: "test-env-" + string(managedEnv.UID),
+					Clustercredentials_id: clusterCredentials.Clustercredentials_cred_id,
+					Name:                  managedEnv.Name,
+				}
 
-			managedEnvironment = db.ManagedEnvironment{
-				Managedenvironment_id: "test-env-" + string(managedEnv.UID),
-				Clustercredentials_id: clusterCredentials.Clustercredentials_cred_id,
-				Name:                  managedEnv.Name,
-			}
+				err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
+				Expect(err).To(BeNil())
 
-			err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
-			Expect(err).To(BeNil())
+				apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
+					APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment,
+					APIResourceUID:       string(managedEnv.UID),
+					APIResourceName:      managedEnv.Name,
+					APIResourceNamespace: managedEnv.Namespace,
+					NamespaceUID:         "test-" + string(uuid.NewUUID()),
+					DBRelationType:       db.APICRToDatabaseMapping_DBRelationType_ManagedEnvironment,
+					DBRelationKey:        managedEnvironment.Managedenvironment_id,
+				}
 
-			apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
-				APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment,
-				APIResourceUID:       string(managedEnv.UID),
-				APIResourceName:      managedEnv.Name,
-				APIResourceNamespace: managedEnv.Namespace,
-				NamespaceUID:         "test-" + string(uuid.NewUUID()),
-				DBRelationType:       db.APICRToDatabaseMapping_DBRelationType_ManagedEnvironment,
-				DBRelationKey:        managedEnvironment.Managedenvironment_id,
-			}
+			})
 
+			It("Should not delete any of the database entries as long as the Managed Environment CR is present in cluster, and the UID matches the APICRToDatabaseMapping value", func() {
+				defer dbq.CloseDatabase()
+
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that no entry is deleted from DB.")
+				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+				Expect(err).To(BeNil())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+			})
+
+			It("Should delete related database entries from DB, if the Managed Environment CR of the APICRToDatabaseMapping is not present on cluster.", func() {
+				defer dbq.CloseDatabase()
+
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				managedEnvironment.Name = "test-env-" + string(uuid.NewUUID())
+				managedEnvironment.Managedenvironment_id = "test-" + string(uuid.NewUUID())
+				err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
+				Expect(err).To(BeNil())
+
+				apiCRToDatabaseMapping.DBRelationKey = managedEnvironment.Managedenvironment_id
+				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+				apiCRToDatabaseMapping.APIResourceName = managedEnvironment.Name
+				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+			})
+
+			It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+				defer dbq.CloseDatabase()
+
+				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+			})
 		})
 
-		It("Should not delete any of the database entries as long as the Managed Environment CR is present in cluster, and the UID matches the APICRToDatabaseMapping value", func() {
-			defer dbq.CloseDatabase()
+		Context("Testing Reconcile for APICRToDBMapping table entries of RepositoryCredential CR.", func() {
+			var log logr.Logger
+			var ctx context.Context
+			var dbq db.AllDatabaseQueries
+			var k8sClient client.WithWatch
+			var clusterUser *db.ClusterUser
+			var apiCRToDatabaseMapping db.APICRToDatabaseMapping
+			var gitopsRepositoryCredentials db.RepositoryCredentials
 
-			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
-			Expect(err).To(BeNil())
+			BeforeEach(func() {
+				scheme,
+					argocdNamespace,
+					kubesystemNamespace,
+					apiNamespace,
+					err := tests.GenericTestSetup()
+				Expect(err).To(BeNil())
 
-			By("Call function for apiCrToDbMappingDbReconcile.")
-			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+				// Create fake client
+				k8sClient = fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
+					Build()
 
-			By("Verify that no entry is deleted from DB.")
-			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
-			Expect(err).To(BeNil())
+				err = db.SetupForTestingDBGinkgo()
+				Expect(err).To(BeNil())
 
-			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
-			Expect(err).To(BeNil())
+				ctx = context.Background()
+				log = logger.FromContext(ctx)
+				dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+				Expect(err).To(BeNil())
+
+				_, _, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
+				Expect(err).To(BeNil())
+
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-secret",
+						Namespace: "test-k8s-namespace",
+					},
+					Type: "managed-gitops.redhat.com/managed-environment",
+					StringData: map[string]string{
+						"username": "test-user",
+						"password": "test@123",
+					},
+				}
+				err = k8sClient.Create(context.Background(), secret)
+				Expect(err).To(BeNil())
+
+				repoCredential := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-repo-" + string(uuid.NewUUID()),
+						Namespace: "test-k8s-namespace",
+						UID:       uuid.NewUUID(),
+					},
+					Spec: managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredentialSpec{
+						Repository: "https://test-private-url",
+						Secret:     "test-secret",
+					},
+				}
+				err = k8sClient.Create(context.Background(), &repoCredential)
+				Expect(err).To(BeNil())
+
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: repoCredential.Name, Namespace: repoCredential.Namespace}, &repoCredential)
+				Expect(err).To(BeNil())
+
+				clusterUser = &db.ClusterUser{
+					Clusteruser_id: "test-repocred-user-id",
+					User_name:      "test-repocred-user",
+				}
+				err = dbq.CreateClusterUser(ctx, clusterUser)
+				Expect(err).To(BeNil())
+
+				By("Creating a RepositoryCredentials object")
+				gitopsRepositoryCredentials = db.RepositoryCredentials{
+					RepositoryCredentialsID: "test-repo-" + string(uuid.NewUUID()),
+					UserID:                  clusterUser.Clusteruser_id,
+					PrivateURL:              "https://test-private-url",
+					AuthUsername:            "test-auth-username",
+					AuthPassword:            "test-auth-password",
+					AuthSSHKey:              "test-auth-ssh-key",
+					SecretObj:               "test-secret-obj",
+					EngineClusterID:         gitopsEngineInstance.Gitopsengineinstance_id,
+				}
+				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
+				Expect(err).To(BeNil())
+
+				apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
+					APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentRepositoryCredential,
+					APIResourceUID:       string(repoCredential.UID),
+					APIResourceName:      repoCredential.Name,
+					APIResourceNamespace: repoCredential.Namespace,
+					NamespaceUID:         "test-" + string(uuid.NewUUID()),
+					DBRelationType:       db.APICRToDatabaseMapping_DBRelationType_ManagedEnvironment,
+					DBRelationKey:        gitopsRepositoryCredentials.RepositoryCredentialsID,
+				}
+			})
+
+			It("Should not delete any of the database entries as long as the RepositoryCredentials CR is present in cluster, and the UID matches the APICRToDatabaseMapping value", func() {
+				defer dbq.CloseDatabase()
+
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that no entry is deleted from DB.")
+				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentials.RepositoryCredentialsID)
+				Expect(err).To(BeNil())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+			})
+
+			It("Should delete related database entries from DB, if the Managed Environment CR of the APICRToDatabaseMapping is not present on cluster.", func() {
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				gitopsRepositoryCredentials.RepositoryCredentialsID = "test-repo-" + string(uuid.NewUUID())
+				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
+				Expect(err).To(BeNil())
+
+				apiCRToDatabaseMapping.DBRelationKey = gitopsRepositoryCredentials.RepositoryCredentialsID
+				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+				apiCRToDatabaseMapping.APIResourceName = "test-" + string(uuid.NewUUID())
+				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentials.RepositoryCredentialsID)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+			})
+
+			It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				gitopsRepositoryCredentials.RepositoryCredentialsID = "test-repo-" + string(uuid.NewUUID())
+				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
+				Expect(err).To(BeNil())
+
+				apiCRToDatabaseMapping.DBRelationKey = gitopsRepositoryCredentials.RepositoryCredentialsID
+				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+				Expect(err).To(BeNil())
+
+				By("Call function for apiCrToDbMappingDbReconcile.")
+				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentials.RepositoryCredentialsID)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+			})
 		})
-
-		It("Should delete related database entries from DB, if the Managed Environment CR of the APICRToDatabaseMapping is not present on cluster.", func() {
-			defer dbq.CloseDatabase()
-
-			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
-			Expect(err).To(BeNil())
-
-			managedEnvironment.Name = "test-env-" + string(uuid.NewUUID())
-			managedEnvironment.Managedenvironment_id = "test-" + string(uuid.NewUUID())
-			err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
-			Expect(err).To(BeNil())
-
-			apiCRToDatabaseMapping.DBRelationKey = managedEnvironment.Managedenvironment_id
-			apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
-			apiCRToDatabaseMapping.APIResourceName = managedEnvironment.Name
-			err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
-			Expect(err).To(BeNil())
-
-			By("Call function for apiCrToDbMappingDbReconcile.")
-			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
-
-			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
-
-			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
-			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
-			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-		})
-
-		It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
-			defer dbq.CloseDatabase()
-
-			apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
-			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
-			Expect(err).To(BeNil())
-
-			By("Call function for apiCrToDbMappingDbReconcile.")
-			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
-
-			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
-
-			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
-			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
-			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-		})
-
 	})
 })
