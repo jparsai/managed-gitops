@@ -56,7 +56,8 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 		log := log.FromContext(ctx).WithValues("component", "database-reconciler")
 
 		_, _ = sharedutil.CatchPanic(func() error {
-			databaseReconcile(ctx, r.DB, r.Client, log)
+			//deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
+			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, log)
 			return nil
 		})
 
@@ -67,11 +68,11 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 
 }
 
-// databaseReconcile loops through the DTAMs in a database, and verifies they are still valid. If not, the resources are deleted.
-func databaseReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
+// deplToAppMappingDbReconcile loops through the DTAMs in a database, and verifies they are still valid. If not, the resources are deleted.
+func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
 	offSet := 0
 
-	log = log.WithValues("job", "databaseReconciler")
+	log = log.WithValues("job", "deplToAppMappingDbReconcile")
 
 	// Continuously iterate and fetch batches until all entries of DeploymentToApplicationMapping table are processed.
 	for {
@@ -111,7 +112,7 @@ func databaseReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client
 					log.Info("GitOpsDeployment " + gitOpsDeployment.Name + " not found in Cluster, probably user deleted it, " +
 						"but It still exists in DB, hence deleteing related database entries.")
 
-					if err := cleanEntriesFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
+					if err := cleanDeplToAppMappingFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
 						log.Error(err, "Error occurred in Database Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
 					}
 				} else {
@@ -124,7 +125,7 @@ func databaseReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client
 
 				// This means that another GitOpsDeployment exists in the namespace with this name.
 
-				if err := cleanEntriesFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
+				if err := cleanDeplToAppMappingFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
 					log.Error(err, "Error occurred in Database Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
 				}
 
@@ -138,8 +139,73 @@ func databaseReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client
 	}
 }
 
-// cleanEntriesFromDb deletes database entries related to a given GitOpsDeployment
-func cleanEntriesFromDb(ctx context.Context, deplToAppMapping *db.DeploymentToApplicationMapping,
+// ApiCrToDbMappingDbReconcile loops through the APICRTODBMapping in a database, and verifies they are still valid. If not, the resources are deleted.
+func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
+	offSet := 0
+	log = log.WithValues("job", "ApiCrToDbMappingDbReconcile")
+
+	// Continuously iterate and fetch batches until all entries of APICRTODBMapping table are processed.
+	for {
+		if offSet != 0 {
+			time.Sleep(sleepIntervalsOfBatches)
+		}
+
+		var listOfApiCrToDbMapping []db.APICRToDatabaseMapping
+
+		// Fetch APICRToDatabaseMapping table entries in batch size as configured above.​
+		if err := dbQueries.GetAPICRToDatabaseMappingBatch(ctx, &listOfApiCrToDbMapping, appRowBatchSize, offSet); err != nil {
+			log.Error(err, fmt.Sprintf("Error occurred in Database Reconcile while fetching batch from Offset: %d to %d: ",
+				offSet, offSet+appRowBatchSize))
+			break
+		}
+
+		// Break the loop if no entries are left in table to be processed.
+		if len(listOfApiCrToDbMapping) == 0 {
+			log.Info("All APICRToDatabaseMapping entries are processed by Namespace Reconciler.")
+			break
+		}
+
+		// Iterate over batch received above.
+		for i := range listOfApiCrToDbMapping {
+			apiCrToDbMappingFromDB := listOfApiCrToDbMapping[i] // To avoid "Implicit memory aliasing in for loop." error.
+
+			objectMeta := metav1.ObjectMeta{
+				Name:      apiCrToDbMappingFromDB.APIResourceName,
+				Namespace: apiCrToDbMappingFromDB.APIResourceNamespace,
+			}
+
+			if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment == apiCrToDbMappingFromDB.APIResourceType {
+				managedEnv := managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{ObjectMeta: objectMeta}
+
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &managedEnv, log); isOrphan {
+					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						if err = cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "ManagedEnvironment", log, managedEnv); err != nil {
+							log.Error(err, "Error occurred in Database Reconciler while cleaning managedEnv entries from DB.")
+						}
+					}
+				}
+			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentRepositoryCredential == apiCrToDbMappingFromDB.APIResourceType {
+				gitOpsDeploymentRepositoryCredential := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{ObjectMeta: objectMeta}
+
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentRepositoryCredential, log); isOrphan {
+					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "RepositoryCredential", log, gitOpsDeploymentRepositoryCredential); err != nil {
+							log.Error(err, "Error occurred in Database Reconciler while cleaning RepositoryCredential entries from DB:")
+						}
+					}
+				}
+			}
+
+			log.Info("Database Reconcile processed deploymentToApplicationMapping entry: " + apiCrToDbMappingFromDB.APIResourceUID)
+		}
+
+		// Skip processed entries in next iteration
+		offSet += appRowBatchSize
+	}
+}
+
+// cleanDeplToAppMappingFromDb deletes database entries related to a given GitOpsDeployment
+func cleanDeplToAppMappingFromDb(ctx context.Context, deplToAppMapping *db.DeploymentToApplicationMapping,
 	dbQueries db.ApplicationScopedQueries, logger logr.Logger) error {
 	dbApplicationFound := true
 
@@ -162,15 +228,8 @@ func cleanEntriesFromDb(ctx context.Context, deplToAppMapping *db.DeploymentToAp
 	log := logger.WithValues("applicationID", deplToAppMapping.Application_id)
 
 	// 1) Remove the ApplicationState from the database
-	rowsDeleted, err := dbQueries.DeleteApplicationStateById(ctx, deplToAppMapping.Application_id)
-	if err != nil {
-		log.V(sharedutil.LogLevel_Warn).Error(err, "unable to delete application state by id")
+	if err := cleanCrFromDB(ctx, dbQueries, deplToAppMapping.Application_id, "ApplicationState", log, deplToAppMapping); err != nil {
 		return err
-	} else if rowsDeleted == 0 {
-		// Log the warning, but continue
-		log.Info("No ApplicationState rows were found, while cleaning up after deleted GitOpsDeployment", "rowsDeleted", rowsDeleted)
-	} else {
-		log.Info("ApplicationState rows were successfully deleted, while cleaning up after deleted GitOpsDeployment", "rowsDeleted", rowsDeleted)
 	}
 
 	// 2) Set the application field of SyncOperations to nil, for all SyncOperations that point to this Application
@@ -186,15 +245,8 @@ func cleanEntriesFromDb(ctx context.Context, deplToAppMapping *db.DeploymentToAp
 	}
 
 	// 3) Delete DeplToAppMapping row that points to this Application
-	rowsDeleted, err = dbQueries.DeleteDeploymentToApplicationMappingByDeplId(ctx, deplToAppMapping.Deploymenttoapplicationmapping_uid_id)
-	if err != nil {
-		log.Error(err, "unable to delete deplToAppMapping by id", "deplToAppMapUid", deplToAppMapping.Deploymenttoapplicationmapping_uid_id)
+	if err := cleanCrFromDB(ctx, dbQueries, deplToAppMapping.Deploymenttoapplicationmapping_uid_id, "DeploymentToApplicationMapping", log, deplToAppMapping); err != nil {
 		return err
-	} else if rowsDeleted == 0 {
-		// Log the warning, but continue
-		log.V(sharedutil.LogLevel_Warn).Error(nil, "unexpected number of rows deleted for deplToAppMapping", "rowsDeleted", rowsDeleted)
-	} else {
-		log.Info("While cleaning up after deleted GitOpsDeployment, deleted deplToAppMapping", "deplToAppMapUid", deplToAppMapping.Deploymenttoapplicationmapping_uid_id)
 	}
 
 	if !dbApplicationFound {
@@ -207,13 +259,64 @@ func cleanEntriesFromDb(ctx context.Context, deplToAppMapping *db.DeploymentToAp
 
 	// 4) Remove the Application from the database
 	log.Info("GitOpsDeployment was deleted, so deleting Application row from database")
-	rowsDeleted, err = dbQueries.DeleteApplicationById(ctx, deplToAppMapping.Application_id)
+
+	if err := cleanCrFromDB(ctx, dbQueries, deplToAppMapping.Application_id, "Application", log, deplToAppMapping); err != nil {
+		return err
+	}
+	return nil
+}
+
+func isRowOrphan(ctx context.Context, k8sClient client.Client, apiCrToDbMapping *db.APICRToDatabaseMapping, obj client.Object, logger logr.Logger) bool {
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, obj); err != nil {
+		if apierr.IsNotFound(err) {
+			// A) If CR is not found in cluster, delete related entries from table
+			logger.Info("Resource " + obj.GetName() + " not found in Cluster, probably user deleted it, " +
+				"but It still exists in DB, hence deleteing related database entries.")
+			return true
+		} else {
+			// B) Some other unexpected error occurred, so we just skip it until next time
+			logger.Error(err, "Error occurred in Database Reconciler while fetching resource from cluster: ")
+			return false
+		}
+		// C) If the CR does exist, but the UID doesn't match, then we can still delete DB entry.
+	} else if string(obj.GetUID()) != apiCrToDbMapping.APIResourceUID {
+		// This means that another CR exists in the namespace with this name.
+		return true
+	}
+	return false
+}
+
+func cleanCrFromDB(ctx context.Context, dbQueries db.ApplicationScopedQueries, id string, crType string, logger logr.Logger, t interface{}) error {
+	var rowsDeleted int
+	var err error
+
+	switch crType {
+
+	case "ManagedEnvironment":
+		rowsDeleted, err = dbQueries.DeleteManagedEnvironmentById(ctx, id)
+	case "RepositoryCredential":
+		rowsDeleted, err = dbQueries.DeleteRepositoryCredentialsByID(ctx, id)
+	case "ApplicationState":
+		rowsDeleted, err = dbQueries.DeleteApplicationStateById(ctx, id)
+	case "DeploymentToApplicationMapping":
+		rowsDeleted, err = dbQueries.DeleteDeploymentToApplicationMappingByDeplId(ctx, id)
+	case "Application":
+		rowsDeleted, err = dbQueries.DeleteApplicationById(ctx, id)
+	case "APICRToDatabaseMapping":
+		apiCrToDbMapping, ok := t.(db.APICRToDatabaseMapping)
+		if ok {
+			rowsDeleted, err = dbQueries.DeleteAPICRToDatabaseMapping(ctx, &apiCrToDbMapping)
+		}
+	}
+
 	if err != nil {
-		// Log the error, but continue
-		log.Error(err, "unable to delete application by id")
+		logger.V(sharedutil.LogLevel_Warn).Error(err, "unable to delete "+crType+" by id "+id)
+		return err
 	} else if rowsDeleted == 0 {
-		// Log the error, but continue
-		log.V(sharedutil.LogLevel_Warn).Error(nil, "unexpected number of rows deleted for application", "rowsDeleted", rowsDeleted)
+		// Log the warning, but continue
+		logger.Info("No rows were found in table, while cleaning up after deleted ManagedEnvironment"+crType, "rowsDeleted", rowsDeleted)
+	} else {
+		logger.Info(crType+" rows were successfully deleted, while cleaning up after deleted "+crType, "rowsDeleted", rowsDeleted)
 	}
 	return nil
 }

@@ -4,22 +4,23 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/tests"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	db "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logger "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("DB Reconciler Test", func() {
-	Context("Controller event loop responds to channel events", func() {
+	Context("Testing Reconcile for DeploymentToApplicationMapping table entries.", func() {
 
 		var log logr.Logger
 		var ctx context.Context
@@ -83,7 +84,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment",
 					Namespace: "test-namespace",
-					UID:       "test-" + types.UID(uuid.New().String()),
+					UID:       "test-" + uuid.NewUUID(),
 				},
 				Spec: managedgitopsv1alpha1.GitOpsDeploymentSpec{
 					Source: managedgitopsv1alpha1.ApplicationSource{},
@@ -118,129 +119,287 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(err).To(BeNil())
 		})
 
-		var _ = Describe("Tests Database Reconciler utility function.", func() {
-			Context("It tests Database Reconciler utility function databaseReconcile().", func() {
+		It("Should not delete any of the database entries as long as the GitOpsDeployment CR is present in cluster, and the UID matches the DTAM value", func() {
+			defer dbq.CloseDatabase()
 
-				It("Should not delete any of the database entries as long as the GitOpsDeployment CR is present in cluster, and the UID matches the DTAM value", func() {
-					defer dbq.CloseDatabase()
+			By("Call function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
+			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-					By("Call function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
-					databaseReconcile(ctx, dbq, k8sClient, log)
+			By("Verify that no entry is deleted from DB.")
+			err := dbq.GetApplicationStateById(ctx, &applicationState)
+			Expect(err).To(BeNil())
 
-					By("Verify that no entry is deleted from DB.")
-					err := dbq.GetApplicationStateById(ctx, &applicationState)
-					Expect(err).To(BeNil())
+			err = dbq.GetSyncOperationById(ctx, &syncOperation)
+			Expect(err).To(BeNil())
+			Expect(syncOperation.Application_id).NotTo(BeEmpty())
 
-					err = dbq.GetSyncOperationById(ctx, &syncOperation)
-					Expect(err).To(BeNil())
-					Expect(syncOperation.Application_id).NotTo(BeEmpty())
+			err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
+			Expect(err).To(BeNil())
 
-					err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
-					Expect(err).To(BeNil())
-
-					err = dbq.GetApplicationById(ctx, &application)
-					Expect(err).To(BeNil())
-				})
-
-				It("Should delete related database entries from DB, if the GitOpsDeployment CRs of the DTAM is not present on cluster.", func() {
-					defer dbq.CloseDatabase()
-
-					// Create another Application entry
-					applicationOne := application
-					applicationOne.Application_id = "test-my-application-1"
-					applicationOne.Name = "my-application-1"
-					err := dbq.CreateApplication(ctx, &applicationOne)
-					Expect(err).To(BeNil())
-
-					// Create another DeploymentToApplicationMapping entry
-					deploymentToApplicationMappingOne := deploymentToApplicationMapping
-					deploymentToApplicationMappingOne.Deploymenttoapplicationmapping_uid_id = "test-" + uuid.New().String()
-					deploymentToApplicationMappingOne.Application_id = applicationOne.Application_id
-					deploymentToApplicationMappingOne.DeploymentName = "test-deployment-1"
-					err = dbq.CreateDeploymentToApplicationMapping(ctx, &deploymentToApplicationMappingOne)
-					Expect(err).To(BeNil())
-
-					// Create another ApplicationState entry
-					applicationStateOne := applicationState
-					applicationStateOne.Applicationstate_application_id = applicationOne.Application_id
-					err = dbq.CreateApplicationState(ctx, &applicationStateOne)
-					Expect(err).To(BeNil())
-
-					// Create another SyncOperation entry
-					syncOperationOne := syncOperation
-					syncOperationOne.SyncOperation_id = "test-syncOperation-1"
-					syncOperationOne.Application_id = applicationOne.Application_id
-					syncOperationOne.DeploymentNameField = deploymentToApplicationMappingOne.DeploymentName
-					err = dbq.CreateSyncOperation(ctx, &syncOperationOne)
-					Expect(err).To(BeNil())
-
-					By("Call function for databaseReconcile to check/delete DB entries if GitOpsDeployment CR is not present.")
-					databaseReconcile(ctx, dbq, k8sClient, log)
-
-					By("Verify that entries for the GitOpsDeployment which is available in cluster, are not deleted from DB.")
-
-					err = dbq.GetApplicationStateById(ctx, &applicationState)
-					Expect(err).To(BeNil())
-
-					err = dbq.GetSyncOperationById(ctx, &syncOperation)
-					Expect(err).To(BeNil())
-					Expect(syncOperation.Application_id).To(Equal(application.Application_id))
-
-					err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
-					Expect(err).To(BeNil())
-
-					err = dbq.GetApplicationById(ctx, &application)
-					Expect(err).To(BeNil())
-
-					By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
-
-					err = dbq.GetApplicationStateById(ctx, &applicationStateOne)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-					err = dbq.GetSyncOperationById(ctx, &syncOperationOne)
-					Expect(err).To(BeNil())
-					Expect(syncOperationOne.Application_id).To(BeEmpty())
-
-					err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMappingOne)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-					err = dbq.GetApplicationById(ctx, &applicationOne)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-				})
-
-				It("should delete the DTAM if the GitOpsDeployment CR if it is present, but the UID doesn't match what is in the DTAM", func() {
-					defer dbq.CloseDatabase()
-
-					By("We ensure that the GitOpsDeployment still has the same name, but has a different UID. This simulates a new GitOpsDeployment with the same name/namespace.")
-					newUID := "test-" + types.UID(uuid.New().String())
-					gitopsDepl.UID = newUID
-					err := k8sClient.Update(ctx, &gitopsDepl)
-					Expect(err).To(BeNil())
-
-					err = k8sClient.Get(ctx, client.ObjectKeyFromObject(&gitopsDepl), &gitopsDepl)
-					Expect(err).To(BeNil())
-					Expect(gitopsDepl.UID).To(Equal(newUID))
-
-					By("calling function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
-					databaseReconcile(ctx, dbq, k8sClient, log)
-
-					By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
-
-					err = dbq.GetApplicationStateById(ctx, &applicationState)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-					err = dbq.GetSyncOperationById(ctx, &syncOperation)
-					Expect(err).To(BeNil())
-					Expect(syncOperation.Application_id).To(BeEmpty())
-
-					err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-					err = dbq.GetApplicationById(ctx, &application)
-					Expect(db.IsResultNotFoundError(err)).To(BeTrue())
-
-				})
-			})
+			err = dbq.GetApplicationById(ctx, &application)
+			Expect(err).To(BeNil())
 		})
+
+		It("Should delete related database entries from DB, if the GitOpsDeployment CRs of the DTAM is not present on cluster.", func() {
+			defer dbq.CloseDatabase()
+
+			// Create another Application entry
+			applicationOne := application
+			applicationOne.Application_id = "test-my-application-1"
+			applicationOne.Name = "my-application-1"
+			err := dbq.CreateApplication(ctx, &applicationOne)
+			Expect(err).To(BeNil())
+
+			// Create another DeploymentToApplicationMapping entry
+			deploymentToApplicationMappingOne := deploymentToApplicationMapping
+			deploymentToApplicationMappingOne.Deploymenttoapplicationmapping_uid_id = "test-" + string(uuid.NewUUID())
+			deploymentToApplicationMappingOne.Application_id = applicationOne.Application_id
+			deploymentToApplicationMappingOne.DeploymentName = "test-deployment-1"
+			err = dbq.CreateDeploymentToApplicationMapping(ctx, &deploymentToApplicationMappingOne)
+			Expect(err).To(BeNil())
+
+			// Create another ApplicationState entry
+			applicationStateOne := applicationState
+			applicationStateOne.Applicationstate_application_id = applicationOne.Application_id
+			err = dbq.CreateApplicationState(ctx, &applicationStateOne)
+			Expect(err).To(BeNil())
+
+			// Create another SyncOperation entry
+			syncOperationOne := syncOperation
+			syncOperationOne.SyncOperation_id = "test-syncOperation-1"
+			syncOperationOne.Application_id = applicationOne.Application_id
+			syncOperationOne.DeploymentNameField = deploymentToApplicationMappingOne.DeploymentName
+			err = dbq.CreateSyncOperation(ctx, &syncOperationOne)
+			Expect(err).To(BeNil())
+
+			By("Call function for databaseReconcile to check/delete DB entries if GitOpsDeployment CR is not present.")
+			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that entries for the GitOpsDeployment which is available in cluster, are not deleted from DB.")
+
+			err = dbq.GetApplicationStateById(ctx, &applicationState)
+			Expect(err).To(BeNil())
+
+			err = dbq.GetSyncOperationById(ctx, &syncOperation)
+			Expect(err).To(BeNil())
+			Expect(syncOperation.Application_id).To(Equal(application.Application_id))
+
+			err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
+			Expect(err).To(BeNil())
+
+			err = dbq.GetApplicationById(ctx, &application)
+			Expect(err).To(BeNil())
+
+			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+			err = dbq.GetApplicationStateById(ctx, &applicationStateOne)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetSyncOperationById(ctx, &syncOperationOne)
+			Expect(err).To(BeNil())
+			Expect(syncOperationOne.Application_id).To(BeEmpty())
+
+			err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMappingOne)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetApplicationById(ctx, &applicationOne)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+		})
+
+		It("should delete the DTAM if the GitOpsDeployment CR if it is present, but the UID doesn't match what is in the DTAM", func() {
+			defer dbq.CloseDatabase()
+
+			By("We ensure that the GitOpsDeployment still has the same name, but has a different UID. This simulates a new GitOpsDeployment with the same name/namespace.")
+			newUID := "test-" + uuid.NewUUID()
+			gitopsDepl.UID = newUID
+			err := k8sClient.Update(ctx, &gitopsDepl)
+			Expect(err).To(BeNil())
+
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(&gitopsDepl), &gitopsDepl)
+			Expect(err).To(BeNil())
+			Expect(gitopsDepl.UID).To(Equal(newUID))
+
+			By("calling function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
+			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+			err = dbq.GetApplicationStateById(ctx, &applicationState)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetSyncOperationById(ctx, &syncOperation)
+			Expect(err).To(BeNil())
+			Expect(syncOperation.Application_id).To(BeEmpty())
+
+			err = dbq.GetDeploymentToApplicationMappingByApplicationId(ctx, &deploymentToApplicationMapping)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetApplicationById(ctx, &application)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+		})
+	})
+
+	Context("Testing Reconcile for APICRToDBMapping table entries.", func() {
+
+		var log logr.Logger
+		var ctx context.Context
+		var dbq db.AllDatabaseQueries
+		var k8sClient client.WithWatch
+		var clusterCredentials db.ClusterCredentials
+		var managedEnvironment db.ManagedEnvironment
+		var apiCRToDatabaseMapping db.APICRToDatabaseMapping
+
+		BeforeEach(func() {
+			scheme,
+				argocdNamespace,
+				kubesystemNamespace,
+				apiNamespace,
+				err := tests.GenericTestSetup()
+			Expect(err).To(BeNil())
+
+			// Create fake client
+			k8sClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
+
+			err = db.SetupForTestingDBGinkgo()
+			Expect(err).To(BeNil())
+
+			ctx = context.Background()
+			log = logger.FromContext(ctx)
+			dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+			Expect(err).To(BeNil())
+
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-managed-env-secret",
+					Namespace: "test-k8s-namespace",
+				},
+				Type:       "managed-gitops.redhat.com/managed-environment",
+				StringData: map[string]string{"kubeconfig": "abc"},
+			}
+
+			err = k8sClient.Create(context.Background(), secret)
+			Expect(err).To(BeNil())
+
+			managedEnv := &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-env-" + string(uuid.NewUUID()),
+					Namespace: "test-k8s-namespace",
+					UID:       uuid.NewUUID(),
+				},
+				Spec: managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
+					APIURL:                     "",
+					ClusterCredentialsSecret:   secret.Name,
+					AllowInsecureSkipTLSVerify: true,
+				},
+			}
+
+			err = k8sClient.Create(context.Background(), managedEnv)
+			Expect(err).To(BeNil())
+
+			err = k8sClient.Get(context.Background(), types.NamespacedName{Name: managedEnv.Name, Namespace: managedEnv.Namespace}, managedEnv)
+			Expect(err).To(BeNil())
+
+			clusterCredentials = db.ClusterCredentials{
+				Clustercredentials_cred_id:  "test-" + string(uuid.NewUUID()),
+				Host:                        "host",
+				Kube_config:                 "kube-config",
+				Kube_config_context:         "kube-config-context",
+				Serviceaccount_bearer_token: "serviceaccount_bearer_token",
+				Serviceaccount_ns:           "Serviceaccount_ns",
+			}
+
+			err = dbq.CreateClusterCredentials(ctx, &clusterCredentials)
+			Expect(err).To(BeNil())
+
+			managedEnvironment = db.ManagedEnvironment{
+				Managedenvironment_id: "test-env-" + string(managedEnv.UID),
+				Clustercredentials_id: clusterCredentials.Clustercredentials_cred_id,
+				Name:                  managedEnv.Name,
+			}
+
+			err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
+			Expect(err).To(BeNil())
+
+			apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
+				APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment,
+				APIResourceUID:       string(managedEnv.UID),
+				APIResourceName:      managedEnv.Name,
+				APIResourceNamespace: managedEnv.Namespace,
+				NamespaceUID:         "test-" + string(uuid.NewUUID()),
+				DBRelationType:       db.APICRToDatabaseMapping_DBRelationType_ManagedEnvironment,
+				DBRelationKey:        managedEnvironment.Managedenvironment_id,
+			}
+
+		})
+
+		It("Should not delete any of the database entries as long as the Managed Environment CR is present in cluster, and the UID matches the APICRToDatabaseMapping value", func() {
+			defer dbq.CloseDatabase()
+
+			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+			Expect(err).To(BeNil())
+
+			By("Call function for apiCrToDbMappingDbReconcile.")
+			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that no entry is deleted from DB.")
+			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+			Expect(err).To(BeNil())
+
+			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should delete related database entries from DB, if the Managed Environment CR of the APICRToDatabaseMapping is not present on cluster.", func() {
+			defer dbq.CloseDatabase()
+
+			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+			Expect(err).To(BeNil())
+
+			managedEnvironment.Name = "test-env-" + string(uuid.NewUUID())
+			managedEnvironment.Managedenvironment_id = "test-" + string(uuid.NewUUID())
+			err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
+			Expect(err).To(BeNil())
+
+			apiCRToDatabaseMapping.DBRelationKey = managedEnvironment.Managedenvironment_id
+			apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+			apiCRToDatabaseMapping.APIResourceName = managedEnvironment.Name
+			err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+			Expect(err).To(BeNil())
+
+			By("Call function for apiCrToDbMappingDbReconcile.")
+			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+		})
+
+		It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+			defer dbq.CloseDatabase()
+
+			apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
+			err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
+			Expect(err).To(BeNil())
+
+			By("Call function for apiCrToDbMappingDbReconcile.")
+			apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+
+			err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+			err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+		})
+
 	})
 })
