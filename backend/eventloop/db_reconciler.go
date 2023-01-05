@@ -56,7 +56,7 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 		log := log.FromContext(ctx).WithValues("component", "database-reconciler")
 
 		_, _ = sharedutil.CatchPanic(func() error {
-			//deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
+			deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
 			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, log)
 			return nil
 		})
@@ -194,6 +194,16 @@ func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 						}
 					}
 				}
+			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentSyncRun == apiCrToDbMappingFromDB.APIResourceType {
+				gitOpsDeploymentSyncRun := managedgitopsv1alpha1.GitOpsDeploymentSyncRun{ObjectMeta: objectMeta}
+
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentSyncRun, log); isOrphan {
+					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "GitOpsDeploymentSyncRun", log, gitOpsDeploymentSyncRun); err != nil {
+							log.Error(err, "Error occurred in Database Reconciler while cleaning GitOpsDeploymentSyncRun entries from DB:")
+						}
+					}
+				}
 			}
 
 			log.Info("Database Reconcile processed deploymentToApplicationMapping entry: " + apiCrToDbMappingFromDB.APIResourceUID)
@@ -283,6 +293,7 @@ func isRowOrphan(ctx context.Context, k8sClient client.Client, apiCrToDbMapping 
 		// This means that another CR exists in the namespace with this name.
 		return true
 	}
+
 	return false
 }
 
@@ -302,6 +313,8 @@ func cleanCrFromDB(ctx context.Context, dbQueries db.ApplicationScopedQueries, i
 		rowsDeleted, err = dbQueries.DeleteDeploymentToApplicationMappingByDeplId(ctx, id)
 	case "Application":
 		rowsDeleted, err = dbQueries.DeleteApplicationById(ctx, id)
+	case "GitOpsDeploymentSyncRun":
+		rowsDeleted, err = dbQueries.DeleteSyncOperationById(ctx, id)
 	case "APICRToDatabaseMapping":
 		apiCrToDbMapping, ok := t.(db.APICRToDatabaseMapping)
 		if ok {
