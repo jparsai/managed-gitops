@@ -230,6 +230,8 @@ type ApplicationScopedQueries interface {
 	DeleteApplicationStateById(ctx context.Context, id string) (int, error)
 
 	GetManagedEnvironmentById(ctx context.Context, managedEnvironment *ManagedEnvironment) error
+
+	// Delete ManagedEnvironment row by ID
 	DeleteManagedEnvironmentById(ctx context.Context, id string) (int, error)
 
 	GetGitopsEngineInstanceById(ctx context.Context, engineInstanceParam *GitopsEngineInstance) error
@@ -238,6 +240,7 @@ type ApplicationScopedQueries interface {
 	// based on the primary key of the corresponding database row (for example, ManagedEnvironment)
 	GetAPICRForDatabaseUID(ctx context.Context, apiCRToDatabaseMapping *APICRToDatabaseMapping) error
 
+	// Delete RepositoryCredentials row by ID
 	DeleteRepositoryCredentialsByID(ctx context.Context, id string) (int, error)
 }
 

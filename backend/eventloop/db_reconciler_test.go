@@ -19,7 +19,7 @@ import (
 )
 
 var _ = Describe("DB Reconciler Test", func() {
-	Context("Testing Reconcile for DeploymentToApplicationMapping table entries.", func() {
+	Context("Testing Reconcile for DeplToAppMappingDbReconcile table entries.", func() {
 
 		var log logr.Logger
 		var ctx context.Context
@@ -121,7 +121,7 @@ var _ = Describe("DB Reconciler Test", func() {
 		It("Should not delete any of the database entries as long as the GitOpsDeployment CR is present in cluster, and the UID matches the DTAM value", func() {
 			defer dbq.CloseDatabase()
 
-			By("Call function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
+			By("Call function for deplToAppMappingDbReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
 			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
 
 			By("Verify that no entry is deleted from DB.")
@@ -171,7 +171,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			err = dbq.CreateSyncOperation(ctx, &syncOperationOne)
 			Expect(err).To(BeNil())
 
-			By("Call function for databaseReconcile to check/delete DB entries if GitOpsDeployment CR is not present.")
+			By("Call function for deplToAppMappingDbReconcile to check/delete DB entries if GitOpsDeployment CR is not present.")
 			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
 
 			By("Verify that entries for the GitOpsDeployment which is available in cluster, are not deleted from DB.")
@@ -205,7 +205,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 		})
 
-		It("should delete the DTAM if the GitOpsDeployment CR if it is present, but the UID doesn't match what is in the DTAM", func() {
+		It("Should delete the DTAM if the GitOpsDeployment CR if it is present, but the UID doesn't match what is in the DTAM", func() {
 			defer dbq.CloseDatabase()
 
 			By("We ensure that the GitOpsDeployment still has the same name, but has a different UID. This simulates a new GitOpsDeployment with the same name/namespace.")
@@ -218,7 +218,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(err).To(BeNil())
 			Expect(gitopsDepl.UID).To(Equal(newUID))
 
-			By("calling function for databaseReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
+			By("calling function for deplToAppMappingDbReconcile to check delete DB entries if GitOpsDeployment CR is not present.")
 			deplToAppMappingDbReconcile(ctx, dbq, k8sClient, log)
 
 			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
@@ -271,6 +271,9 @@ var _ = Describe("DB Reconciler Test", func() {
 				dbq, err = db.NewUnsafePostgresDBQueries(true, true)
 				Expect(err).To(BeNil())
 
+				By("Create required CRs in Cluster.")
+
+				// Create Secret in Cluster
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "my-managed-env-secret",
@@ -279,10 +282,10 @@ var _ = Describe("DB Reconciler Test", func() {
 					Type:       "managed-gitops.redhat.com/managed-environment",
 					StringData: map[string]string{"kubeconfig": "abc"},
 				}
-
 				err = k8sClient.Create(context.Background(), secret)
 				Expect(err).To(BeNil())
 
+				// Create GitOpsDeploymentManagedEnvironment CR in cluster
 				managedEnv := &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-env-" + string(uuid.NewUUID()),
@@ -295,10 +298,12 @@ var _ = Describe("DB Reconciler Test", func() {
 						AllowInsecureSkipTLSVerify: true,
 					},
 				}
-
 				err = k8sClient.Create(context.Background(), managedEnv)
 				Expect(err).To(BeNil())
 
+				By("Create required DB entries.")
+
+				// Create DB entry for ClusterCredentials
 				clusterCredentials = db.ClusterCredentials{
 					Clustercredentials_cred_id:  "test-" + string(uuid.NewUUID()),
 					Host:                        "host",
@@ -307,19 +312,19 @@ var _ = Describe("DB Reconciler Test", func() {
 					Serviceaccount_bearer_token: "serviceaccount_bearer_token",
 					Serviceaccount_ns:           "Serviceaccount_ns",
 				}
-
 				err = dbq.CreateClusterCredentials(ctx, &clusterCredentials)
 				Expect(err).To(BeNil())
 
+				// Create DB entry for ManagedEnvironment
 				managedEnvironment = db.ManagedEnvironment{
 					Managedenvironment_id: "test-env-" + string(managedEnv.UID),
 					Clustercredentials_id: clusterCredentials.Clustercredentials_cred_id,
 					Name:                  managedEnv.Name,
 				}
-
 				err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
 				Expect(err).To(BeNil())
 
+				// Create DB entry for APICRToDatabaseMapping
 				apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
 					APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment,
 					APIResourceUID:       string(managedEnv.UID),
@@ -329,7 +334,6 @@ var _ = Describe("DB Reconciler Test", func() {
 					DBRelationType:       db.APICRToDatabaseMapping_DBRelationType_ManagedEnvironment,
 					DBRelationKey:        managedEnvironment.Managedenvironment_id,
 				}
-
 			})
 
 			It("Should not delete any of the database entries as long as the Managed Environment CR is present in cluster, and the UID matches the APICRToDatabaseMapping value", func() {
@@ -355,11 +359,15 @@ var _ = Describe("DB Reconciler Test", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
 
+				// Create another ManagedEnvironment entry
+				managedEnvironmentTemp := managedEnvironment
 				managedEnvironment.Name = "test-env-" + string(uuid.NewUUID())
 				managedEnvironment.Managedenvironment_id = "test-" + string(uuid.NewUUID())
 				err = dbq.CreateManagedEnvironment(ctx, &managedEnvironment)
 				Expect(err).To(BeNil())
 
+				// Create another APICRToDatabaseMapping entry
+				apiCRToDatabaseMappingTemp := apiCRToDatabaseMapping
 				apiCRToDatabaseMapping.DBRelationKey = managedEnvironment.Managedenvironment_id
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				apiCRToDatabaseMapping.APIResourceName = managedEnvironment.Name
@@ -369,18 +377,27 @@ var _ = Describe("DB Reconciler Test", func() {
 				By("Call function for apiCrToDbMappingDbReconcile.")
 				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+				By("Verify that entries for the ManagedEnvironment which is not available in cluster, are deleted from DB.")
 
 				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 
 				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				By("Verify that entries for the ManagedEnvironment which is available in cluster, are not deleted from DB.")
+
+				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironmentTemp)
+				Expect(err).To(BeNil())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMappingTemp)
+				Expect(err).To(BeNil())
 			})
 
-			It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+			It("Should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
 				defer dbq.CloseDatabase()
 
+				// Create another ACTDB entry
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
@@ -388,7 +405,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				By("Call function for apiCrToDbMappingDbReconcile.")
 				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+				By("Verify that entries for the ManagedEnvironment which is not available in cluster, are deleted from DB.")
 
 				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironment)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
@@ -429,9 +446,9 @@ var _ = Describe("DB Reconciler Test", func() {
 				dbq, err = db.NewUnsafePostgresDBQueries(true, true)
 				Expect(err).To(BeNil())
 
-				_, _, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
-				Expect(err).To(BeNil())
+				By("Create required CRs in Cluster.")
 
+				// Create Secret in Cluster
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-secret",
@@ -446,6 +463,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = k8sClient.Create(context.Background(), secret)
 				Expect(err).To(BeNil())
 
+				// Create GitOpsDeploymentRepositoryCredential in Cluster
 				repoCredential := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-repo-" + string(uuid.NewUUID()),
@@ -460,6 +478,12 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = k8sClient.Create(context.Background(), &repoCredential)
 				Expect(err).To(BeNil())
 
+				By("Create required DB entries.")
+
+				_, _, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
+				Expect(err).To(BeNil())
+
+				// Create DB entry for ClusterUser
 				clusterUser = &db.ClusterUser{
 					Clusteruser_id: "test-repocred-user-id",
 					User_name:      "test-repocred-user",
@@ -467,7 +491,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = dbq.CreateClusterUser(ctx, clusterUser)
 				Expect(err).To(BeNil())
 
-				By("Creating a RepositoryCredentials object")
+				// Create DB entry for RepositoryCredentials
 				gitopsRepositoryCredentials = db.RepositoryCredentials{
 					RepositoryCredentialsID: "test-repo-" + string(uuid.NewUUID()),
 					UserID:                  clusterUser.Clusteruser_id,
@@ -481,6 +505,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
 				Expect(err).To(BeNil())
 
+				// Create DB entry for APICRToDatabaseMapping
 				apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
 					APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentRepositoryCredential,
 					APIResourceUID:       string(repoCredential.UID),
@@ -509,16 +534,20 @@ var _ = Describe("DB Reconciler Test", func() {
 				Expect(err).To(BeNil())
 			})
 
-			It("Should delete related database entries from DB, if the Managed Environment CR of the APICRToDatabaseMapping is not present on cluster.", func() {
+			It("Should delete related database entries from DB, if the RepositoryCredentials CR of the APICRToDatabaseMapping is not present on cluster.", func() {
 				defer dbq.CloseDatabase()
 
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
 
+				// Create another GitopsRepositoryCredentials entry in Db
+				gitopsRepositoryCredentialsTemp := gitopsRepositoryCredentials
 				gitopsRepositoryCredentials.RepositoryCredentialsID = "test-repo-" + string(uuid.NewUUID())
 				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
 				Expect(err).To(BeNil())
 
+				// Create another APICRToDatabaseMapping entry in Db
+				apiCRToDatabaseMappingTemp := apiCRToDatabaseMapping
 				apiCRToDatabaseMapping.DBRelationKey = gitopsRepositoryCredentials.RepositoryCredentialsID
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				apiCRToDatabaseMapping.APIResourceName = "test-" + string(uuid.NewUUID())
@@ -535,18 +564,28 @@ var _ = Describe("DB Reconciler Test", func() {
 
 				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				By("Verify that entries for the RepositoryCredentials which is available in cluster, are not deleted from DB.")
+
+				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentialsTemp.RepositoryCredentialsID)
+				Expect(err).To(BeNil())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMappingTemp)
+				Expect(err).To(BeNil())
 			})
 
-			It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+			It("should delete related database entries from DB, if the RepositoryCredentials CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
 				defer dbq.CloseDatabase()
 
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
 
+				// Create another RepositoryCredentials entry in Db
 				gitopsRepositoryCredentials.RepositoryCredentialsID = "test-repo-" + string(uuid.NewUUID())
 				err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
 				Expect(err).To(BeNil())
 
+				// Create another APICRToDatabaseMapping entry in Db
 				apiCRToDatabaseMapping.DBRelationKey = gitopsRepositoryCredentials.RepositoryCredentialsID
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
@@ -555,7 +594,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				By("Call function for apiCrToDbMappingDbReconcile.")
 				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+				By("Verify that entries for the RepositoryCredentials which is not available in cluster, are deleted from DB.")
 
 				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentials.RepositoryCredentialsID)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
@@ -595,20 +634,9 @@ var _ = Describe("DB Reconciler Test", func() {
 				dbq, err = db.NewUnsafePostgresDBQueries(true, true)
 				Expect(err).To(BeNil())
 
-				_, managedEnvironment, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
-				Expect(err).To(BeNil())
+				By("Create required CRs in Cluster.")
 
-				application := &db.Application{
-					Application_id:          "test-app-" + string(uuid.NewUUID()),
-					Name:                    "test-app",
-					Spec_field:              "{}",
-					Engine_instance_inst_id: gitopsEngineInstance.Gitopsengineinstance_id,
-					Managed_environment_id:  managedEnvironment.Managedenvironment_id,
-				}
-
-				err = dbq.CreateApplication(ctx, application)
-				Expect(err).To(BeNil())
-
+				// Create GitOpsDeploymentSyncRun in Cluster
 				gitopsDeplSyncRun := managedgitopsv1alpha1.GitOpsDeploymentSyncRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-gitopsdeployment-syncrun",
@@ -616,7 +644,7 @@ var _ = Describe("DB Reconciler Test", func() {
 						UID:       uuid.NewUUID(),
 					},
 					Spec: managedgitopsv1alpha1.GitOpsDeploymentSyncRunSpec{
-						GitopsDeploymentName: application.Name,
+						GitopsDeploymentName: "test-app",
 						RevisionID:           "HEAD",
 					},
 				}
@@ -624,6 +652,23 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = k8sClient.Create(context.Background(), &gitopsDeplSyncRun)
 				Expect(err).To(BeNil())
 
+				By("Create required DB entries.")
+
+				_, managedEnvironment, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
+				Expect(err).To(BeNil())
+
+				// Create DB entry for Application
+				application := &db.Application{
+					Application_id:          "test-app-" + string(uuid.NewUUID()),
+					Name:                    gitopsDeplSyncRun.Spec.GitopsDeploymentName,
+					Spec_field:              "{}",
+					Engine_instance_inst_id: gitopsEngineInstance.Gitopsengineinstance_id,
+					Managed_environment_id:  managedEnvironment.Managedenvironment_id,
+				}
+				err = dbq.CreateApplication(ctx, application)
+				Expect(err).To(BeNil())
+
+				// Create DB entry for SyncOperation
 				syncOperation = db.SyncOperation{
 					SyncOperation_id:    "test-op-" + string(uuid.NewUUID()),
 					Application_id:      application.Application_id,
@@ -631,9 +676,9 @@ var _ = Describe("DB Reconciler Test", func() {
 					Revision:            "Head",
 					DesiredState:        "Terminated",
 				}
-
 				err = dbq.CreateSyncOperation(ctx, &syncOperation)
 
+				// Create DB entry for APICRToDatabaseMapping
 				apiCRToDatabaseMapping = db.APICRToDatabaseMapping{
 					APIResourceType:      db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentSyncRun,
 					APIResourceUID:       string(gitopsDeplSyncRun.UID),
@@ -668,10 +713,14 @@ var _ = Describe("DB Reconciler Test", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
 
+				// Create another entry for SyncOperation
+				syncOperationTemp := syncOperation
 				syncOperation.SyncOperation_id = "test-sync-" + string(uuid.NewUUID())
 				err = dbq.CreateSyncOperation(ctx, &syncOperation)
 				Expect(err).To(BeNil())
 
+				// Create another entry for APICRToDatabaseMapping
+				apiCRToDatabaseMappingTemp := apiCRToDatabaseMapping
 				apiCRToDatabaseMapping.DBRelationKey = syncOperation.SyncOperation_id
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				apiCRToDatabaseMapping.APIResourceName = "test-" + string(uuid.NewUUID())
@@ -681,25 +730,36 @@ var _ = Describe("DB Reconciler Test", func() {
 				By("Call function for apiCrToDbMappingDbReconcile.")
 				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+				By("Verify that entries for the GitOpsDeploymentSyncRun which is not available in cluster, are deleted from DB.")
 
 				err = dbq.GetSyncOperationById(ctx, &syncOperation)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 
 				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+
+				By("Verify that entries for the GitOpsDeploymentSyncRun which is available in cluster, are not deleted from DB.")
+
+				err = dbq.GetSyncOperationById(ctx, &syncOperationTemp)
+				Expect(err).To(BeNil())
+
+				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMappingTemp)
+				Expect(err).To(BeNil())
+
 			})
 
-			It("should delete related database entries from DB, if the Managed Environment CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
+			It("should delete related database entries from DB, if the GitOpsDeploymentSyncRun CR is present in cluster, but the UID doesn't match what is in the APICRToDatabaseMapping", func() {
 				defer dbq.CloseDatabase()
 
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
 				Expect(err).To(BeNil())
 
+				// Create another SyncOperation DB entry
 				syncOperation.SyncOperation_id = "test-sync-" + string(uuid.NewUUID())
 				err = dbq.CreateSyncOperation(ctx, &syncOperation)
 				Expect(err).To(BeNil())
 
+				// Create another APICRToDatabaseMapping DB entry
 				apiCRToDatabaseMapping.DBRelationKey = syncOperation.SyncOperation_id
 				apiCRToDatabaseMapping.APIResourceUID = "test-" + string(uuid.NewUUID())
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMapping)
@@ -708,7 +768,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				By("Call function for apiCrToDbMappingDbReconcile.")
 				apiCrToDbMappingDbReconcile(ctx, dbq, k8sClient, log)
 
-				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
+				By("Verify that entries for the GitOpsDeploymentSyncRun which is not available in cluster, are deleted from DB.")
 
 				err = dbq.GetSyncOperationById(ctx, &syncOperation)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
@@ -716,7 +776,6 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMapping)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 			})
-
 		})
 	})
 })

@@ -23,17 +23,17 @@ const (
 	sleepIntervalsOfBatches    = 1 * time.Second  // Interval in Millisecond between each batch.
 )
 
-// A 'dangling' DeploymentToApplicationMapping (for lack of a better term) is a DeploymentToApplicationMapping (DTAM)
-// row in the database that points to a K8s resource (GitOpsDeployment CR) that no longer exists.
+// A 'dangling' DB entry (for lack of a better term) is a DeploymentToApplicationMapping (DTAM) or APICRToDatabaseMapping (ACTDM)
+// row in the database that points to a K8s resource (GitOpsDeployment/GitOpsDeploymentManagedEnvironment/GitOpsDeploymentSyncRun/GitOpsDeploymentRepositoryCredential CR) that no longer exists.
 //
-// This usually shouldn't occur: usually we should get informed by K8 when a GitOpsDeployment is deleted, but this
-// is not guaranteed in all cases (for example, if GitOpsDeployments are deleted while the GitOps service is
+// This usually shouldn't occur: usually we should get informed by K8 when a CR is deleted, but this
+// is not guaranteed in all cases (for example, if CRs are deleted while the GitOps service is
 // down/or otherwise not running).
 //
-// Thus, it is useful to have some code that will periodically run to clean up old DTAMs, as as a method of
+// Thus, it is useful to have some code that will periodically run to clean up old DTAMs and ACTDMs, as as a method of
 // background self-healing.
 //
-// This periodic, background self-healing of DTAMs is the responsibility of this file.
+// This periodic, background self-healing of DTAMs and ACTDMs is the responsibility of this file.
 
 // DatabaseReconciler reconciles Database entries
 type DatabaseReconciler struct {
@@ -41,7 +41,7 @@ type DatabaseReconciler struct {
 	DB db.DatabaseQueries
 }
 
-// This function iterates through each entry present of DeploymentToApplicationMapping table in DB and ensures that the required GitOpsDeployment CR is present in cluster.
+// This function iterates through each entry of DTAM and ACTDM tables in DB and ensures that the required CRs is present in cluster.
 func (r *DatabaseReconciler) StartDatabaseReconciler() {
 	r.startTimerForNextCycle()
 }
@@ -84,14 +84,14 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 
 		// Fetch DeploymentToApplicationMapping table entries in batch size as configured above.​
 		if err := dbQueries.GetDeploymentToApplicationMappingBatch(ctx, &listOfdeplToAppMapping, appRowBatchSize, offSet); err != nil {
-			log.Error(err, fmt.Sprintf("Error occurred in Database Reconcile while fetching batch from Offset: %d to %d: ",
+			log.Error(err, fmt.Sprintf("Error occurred in DTAM Reconcile while fetching batch from Offset: %d to %d: ",
 				offSet, offSet+appRowBatchSize))
 			break
 		}
 
 		// Break the loop if no entries are left in table to be processed.
 		if len(listOfdeplToAppMapping) == 0 {
-			log.Info("All DeploymentToApplicationMapping entries are processed by Namespace Reconciler.")
+			log.Info("All DeploymentToApplicationMapping entries are processed by DTAM Reconciler.")
 			break
 		}
 
@@ -110,14 +110,14 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 					// A) If GitOpsDeployment CR is not found in cluster, delete related entries from table
 
 					log.Info("GitOpsDeployment " + gitOpsDeployment.Name + " not found in Cluster, probably user deleted it, " +
-						"but It still exists in DB, hence deleteing related database entries.")
+						"but It still exists in DB, hence deleting related database entries.")
 
 					if err := cleanDeplToAppMappingFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
-						log.Error(err, "Error occurred in Database Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
+						log.Error(err, "Error occurred in DTAM Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
 					}
 				} else {
 					// B) Some other unexpected error occurred, so we just skip it until next time
-					log.Error(err, "Error occurred in Database Reconciler while fetching GitOpsDeployment from cluster: "+gitOpsDeployment.Name)
+					log.Error(err, "Error occurred in DTAM Reconciler while fetching GitOpsDeployment from cluster: "+gitOpsDeployment.Name)
 				}
 
 				// C) If the GitOpsDeployment does exist, but the UID doesn't match, then we can delete DTAM and Application
@@ -126,12 +126,12 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 				// This means that another GitOpsDeployment exists in the namespace with this name.
 
 				if err := cleanDeplToAppMappingFromDb(ctx, &deplToAppMappingFromDB, dbQueries, log); err != nil {
-					log.Error(err, "Error occurred in Database Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
+					log.Error(err, "Error occurred in DTAM Reconciler while cleaning gitOpsDeployment entries from DB: "+gitOpsDeployment.Name)
 				}
 
 			}
 
-			log.Info("Database Reconcile processed deploymentToApplicationMapping entry: " + deplToAppMappingFromDB.Deploymenttoapplicationmapping_uid_id)
+			log.Info("DTAM Reconcile processed deploymentToApplicationMapping entry: " + deplToAppMappingFromDB.Deploymenttoapplicationmapping_uid_id)
 		}
 
 		// Skip processed entries in next iteration
@@ -139,12 +139,12 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 	}
 }
 
-// ApiCrToDbMappingDbReconcile loops through the APICRTODBMapping in a database, and verifies they are still valid. If not, the resources are deleted.
+// ApiCrToDbMappingDbReconcile loops through the ACTDM in a database, and verifies they are still valid. If not, the resources are deleted.
 func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
 	offSet := 0
-	log = log.WithValues("job", "ApiCrToDbMappingDbReconcile")
+	log = log.WithValues("job", "apiCrToDbMappingDbReconcile")
 
-	// Continuously iterate and fetch batches until all entries of APICRTODBMapping table are processed.
+	// Continuously iterate and fetch batches until all entries of ACTDM table are processed.
 	for {
 		if offSet != 0 {
 			time.Sleep(sleepIntervalsOfBatches)
@@ -152,16 +152,16 @@ func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 
 		var listOfApiCrToDbMapping []db.APICRToDatabaseMapping
 
-		// Fetch APICRToDatabaseMapping table entries in batch size as configured above.​
+		// Fetch ACTDMs table entries in batch size as configured above.​
 		if err := dbQueries.GetAPICRToDatabaseMappingBatch(ctx, &listOfApiCrToDbMapping, appRowBatchSize, offSet); err != nil {
-			log.Error(err, fmt.Sprintf("Error occurred in Database Reconcile while fetching batch from Offset: %d to %d: ",
+			log.Error(err, fmt.Sprintf("Error occurred in ACTDM Reconcile while fetching batch from Offset: %d to %d: ",
 				offSet, offSet+appRowBatchSize))
 			break
 		}
 
 		// Break the loop if no entries are left in table to be processed.
 		if len(listOfApiCrToDbMapping) == 0 {
-			log.Info("All APICRToDatabaseMapping entries are processed by Namespace Reconciler.")
+			log.Info("All ACTDM entries are processed by ACTDM Reconciler.")
 			break
 		}
 
@@ -174,39 +174,52 @@ func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 				Namespace: apiCrToDbMappingFromDB.APIResourceNamespace,
 			}
 
+			// Process entry based on type of CR it points to.
 			if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment == apiCrToDbMappingFromDB.APIResourceType {
+				// Process if CR is of GitOpsDeploymentManagedEnvironment type.
 				managedEnv := managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{ObjectMeta: objectMeta}
 
+				// Check if required CR is present in cluster
 				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &managedEnv, log); isOrphan {
+					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						// Clean ManagedEnvironment table entry
 						if err = cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "ManagedEnvironment", log, managedEnv); err != nil {
-							log.Error(err, "Error occurred in Database Reconciler while cleaning managedEnv entries from DB.")
+							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning ManagedEnvironment entries from DB.")
 						}
 					}
 				}
 			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentRepositoryCredential == apiCrToDbMappingFromDB.APIResourceType {
+				// Process if CR is of GitOpsDeploymentRepositoryCredential type.
 				gitOpsDeploymentRepositoryCredential := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{ObjectMeta: objectMeta}
 
+				// Check if required CR is present in cluster
 				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentRepositoryCredential, log); isOrphan {
+					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						// Clean RepositoryCredential table entry
 						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "RepositoryCredential", log, gitOpsDeploymentRepositoryCredential); err != nil {
-							log.Error(err, "Error occurred in Database Reconciler while cleaning RepositoryCredential entries from DB:")
+							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning RepositoryCredential entries from DB:")
 						}
 					}
 				}
 			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentSyncRun == apiCrToDbMappingFromDB.APIResourceType {
+				// Process if CR is of GitOpsDeploymentSyncRun type.
 				gitOpsDeploymentSyncRun := managedgitopsv1alpha1.GitOpsDeploymentSyncRun{ObjectMeta: objectMeta}
 
+				// Check if required CR is present in cluster
 				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentSyncRun, log); isOrphan {
+					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						// Clean GitOpsDeploymentSyncRun table entry
 						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "GitOpsDeploymentSyncRun", log, gitOpsDeploymentSyncRun); err != nil {
-							log.Error(err, "Error occurred in Database Reconciler while cleaning GitOpsDeploymentSyncRun entries from DB:")
+							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning GitOpsDeploymentSyncRun entries from DB:")
 						}
 					}
 				}
 			}
 
-			log.Info("Database Reconcile processed deploymentToApplicationMapping entry: " + apiCrToDbMappingFromDB.APIResourceUID)
+			log.Info("ACTDM Reconcile processed APICRToDatabaseMapping entry: " + apiCrToDbMappingFromDB.APIResourceUID)
 		}
 
 		// Skip processed entries in next iteration
@@ -269,19 +282,20 @@ func cleanDeplToAppMappingFromDb(ctx context.Context, deplToAppMapping *db.Deplo
 
 	// 4) Remove the Application from the database
 	log.Info("GitOpsDeployment was deleted, so deleting Application row from database")
-
 	if err := cleanCrFromDB(ctx, dbQueries, deplToAppMapping.Application_id, "Application", log, deplToAppMapping); err != nil {
 		return err
 	}
 	return nil
 }
 
+// isRowOrphan function checks if given CR is present in cluster.
 func isRowOrphan(ctx context.Context, k8sClient client.Client, apiCrToDbMapping *db.APICRToDatabaseMapping, obj client.Object, logger logr.Logger) bool {
+
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, obj); err != nil {
 		if apierr.IsNotFound(err) {
-			// A) If CR is not found in cluster, delete related entries from table
+			// A) If CR is not found in cluster, proceed to delete related entries from table
 			logger.Info("Resource " + obj.GetName() + " not found in Cluster, probably user deleted it, " +
-				"but It still exists in DB, hence deleteing related database entries.")
+				"but It still exists in DB, hence deleting related database entries.")
 			return true
 		} else {
 			// B) Some other unexpected error occurred, so we just skip it until next time
@@ -294,13 +308,16 @@ func isRowOrphan(ctx context.Context, k8sClient client.Client, apiCrToDbMapping 
 		return true
 	}
 
+	// CR is present in cluster, no need to delete DB entry
 	return false
 }
 
+// cleanCrFromDB deletes database entry of a given CR
 func cleanCrFromDB(ctx context.Context, dbQueries db.ApplicationScopedQueries, id string, crType string, logger logr.Logger, t interface{}) error {
 	var rowsDeleted int
 	var err error
 
+	// Delete row according to type
 	switch crType {
 
 	case "ManagedEnvironment":
