@@ -13,6 +13,8 @@ import (
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	db "github.com/redhat-appstudio/managed-gitops/backend-shared/config/db"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/operations"
+	sharedresourceloop "github.com/redhat-appstudio/managed-gitops/backend/eventloop/shared_resource_loop"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,7 +40,8 @@ const (
 // DatabaseReconciler reconciles Database entries
 type DatabaseReconciler struct {
 	client.Client
-	DB db.DatabaseQueries
+	DB               db.DatabaseQueries
+	K8sClientFactory sharedresourceloop.SRLK8sClientFactory
 }
 
 // This function iterates through each entry of DTAM and ACTDM tables in DB and ensures that the required CRs is present in cluster.
@@ -57,7 +60,7 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 
 		_, _ = sharedutil.CatchPanic(func() error {
 			deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
-			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, log)
+			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, r.K8sClientFactory, log)
 			return nil
 		})
 
@@ -140,7 +143,7 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 }
 
 // ApiCrToDbMappingDbReconcile loops through the ACTDM in a database, and verifies they are still valid. If not, the resources are deleted.
-func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
+func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, k8sClientFactory sharedresourceloop.SRLK8sClientFactory, log logr.Logger) {
 	offSet := 0
 	log = log.WithValues("job", "apiCrToDbMappingDbReconcile")
 
@@ -177,43 +180,69 @@ func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 			// Process entry based on type of CR it points to.
 			if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentManagedEnvironment == apiCrToDbMappingFromDB.APIResourceType {
 				// Process if CR is of GitOpsDeploymentManagedEnvironment type.
-				managedEnv := managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{ObjectMeta: objectMeta}
+				managedEnvK8s := managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{ObjectMeta: objectMeta}
 
 				// Check if required CR is present in cluster
-				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &managedEnv, log); isOrphan {
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &managedEnvK8s, log); isOrphan {
 					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
-						// Clean ManagedEnvironment table entry
-						if err = cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "ManagedEnvironment", log, managedEnv); err != nil {
-							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning ManagedEnvironment entries from DB.")
+
+						managedEnvDb := db.ManagedEnvironment{
+							Managedenvironment_id: apiCrToDbMappingFromDB.DBRelationKey,
+						}
+						if err := dbQueries.GetManagedEnvironmentById(ctx, &managedEnvDb); err == nil {
+							var specialClusterUser db.ClusterUser
+							if err := dbQueries.GetOrCreateSpecialClusterUser(context.Background(), &specialClusterUser); err == nil {
+								if err := sharedresourceloop.DeleteManagedEnvironmentResources(ctx, apiCrToDbMappingFromDB.DBRelationKey, &managedEnvDb, specialClusterUser, k8sClientFactory, dbQueries, log); err != nil {
+									log.Error(err, "Error occurred in APICRToDatabaseMapping Reconciler while cleaning ManagedEnvironment entry "+apiCrToDbMappingFromDB.DBRelationKey+" from DB.")
+								}
+							}
 						}
 					}
 				}
 			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentRepositoryCredential == apiCrToDbMappingFromDB.APIResourceType {
 				// Process if CR is of GitOpsDeploymentRepositoryCredential type.
-				gitOpsDeploymentRepositoryCredential := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{ObjectMeta: objectMeta}
+				repoCredentialK8s := managedgitopsv1alpha1.GitOpsDeploymentRepositoryCredential{ObjectMeta: objectMeta}
 
 				// Check if required CR is present in cluster
-				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentRepositoryCredential, log); isOrphan {
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &repoCredentialK8s, log); isOrphan {
 					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
+						repoCredentialDb, error := dbQueries.GetRepositoryCredentialsByID(ctx, apiCrToDbMappingFromDB.DBRelationKey)
+
 						// Clean RepositoryCredential table entry
-						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "RepositoryCredential", log, gitOpsDeploymentRepositoryCredential); err != nil {
-							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning RepositoryCredential entries from DB:")
+						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "RepositoryCredential", log, repoCredentialK8s); err == nil {
+							if error == nil {
+								// Creare k8s Operation to delete related CRs using Cluster Agent
+								createOperation(ctx, repoCredentialDb.EngineClusterID, repoCredentialDb.RepositoryCredentialsID, repoCredentialK8s.Namespace, db.OperationResourceType_RepositoryCredentials, dbQueries, client, log)
+							}
 						}
 					}
 				}
 			} else if db.APICRToDatabaseMapping_ResourceType_GitOpsDeploymentSyncRun == apiCrToDbMappingFromDB.APIResourceType {
 				// Process if CR is of GitOpsDeploymentSyncRun type.
-				gitOpsDeploymentSyncRun := managedgitopsv1alpha1.GitOpsDeploymentSyncRun{ObjectMeta: objectMeta}
+				syncRunK8s := managedgitopsv1alpha1.GitOpsDeploymentSyncRun{ObjectMeta: objectMeta}
 
 				// Check if required CR is present in cluster
-				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &gitOpsDeploymentSyncRun, log); isOrphan {
+				if isOrphan := isRowOrphan(ctx, client, &apiCrToDbMappingFromDB, &syncRunK8s, log); isOrphan {
 					// If CR is not present in cluster clean ACTDM entry
 					if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "APICRToDatabaseMapping", log, apiCrToDbMappingFromDB); err == nil {
 						// Clean GitOpsDeploymentSyncRun table entry
-						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "GitOpsDeploymentSyncRun", log, gitOpsDeploymentSyncRun); err != nil {
-							log.Error(err, "Error occurred in ACTDM Reconciler while cleaning GitOpsDeploymentSyncRun entries from DB:")
+
+						syncOperationDb := db.SyncOperation{SyncOperation_id: apiCrToDbMappingFromDB.DBRelationKey}
+						var error error
+						var applicationDb db.Application
+
+						if error = dbQueries.GetSyncOperationById(ctx, &syncOperationDb); error == nil {
+							applicationDb = db.Application{Application_id: syncOperationDb.Application_id}
+							error = dbQueries.GetApplicationById(ctx, &applicationDb)
+						}
+
+						if err := cleanCrFromDB(ctx, dbQueries, apiCrToDbMappingFromDB.DBRelationKey, "GitOpsDeploymentSyncRun", log, syncRunK8s); err == nil {
+							if error == nil {
+								// Creare k8s Operation to delete related CRs using Cluster Agent
+								createOperation(ctx, applicationDb.Engine_instance_inst_id, applicationDb.Application_id, syncRunK8s.Namespace, db.OperationResourceType_SyncOperation, dbQueries, client, log)
+							}
 						}
 					}
 				}
@@ -320,8 +349,6 @@ func cleanCrFromDB(ctx context.Context, dbQueries db.ApplicationScopedQueries, i
 	// Delete row according to type
 	switch crType {
 
-	case "ManagedEnvironment":
-		rowsDeleted, err = dbQueries.DeleteManagedEnvironmentById(ctx, id)
 	case "RepositoryCredential":
 		rowsDeleted, err = dbQueries.DeleteRepositoryCredentialsByID(ctx, id)
 	case "ApplicationState":
@@ -340,13 +367,47 @@ func cleanCrFromDB(ctx context.Context, dbQueries db.ApplicationScopedQueries, i
 	}
 
 	if err != nil {
-		logger.V(sharedutil.LogLevel_Warn).Error(err, "unable to delete "+crType+" by id "+id)
+		logger.Error(err, "Error occurred in DB Reconciler while cleaning "+crType+" entry "+id+" from DB.")
 		return err
 	} else if rowsDeleted == 0 {
 		// Log the warning, but continue
-		logger.Info("No rows were found in table, while cleaning up after deleted ManagedEnvironment"+crType, "rowsDeleted", rowsDeleted)
+		logger.Info("No rows were found in table, while cleaning up after deleted "+crType, "rowsDeleted", rowsDeleted)
 	} else {
 		logger.Info(crType+" rows were successfully deleted, while cleaning up after deleted "+crType, "rowsDeleted", rowsDeleted)
 	}
 	return nil
+}
+
+// createOperation creates a k8s operation to inform Cluster Agent about deletion of related k8s CRs.
+func createOperation(ctx context.Context, gitopsengineinstanceId, resourceId, namespace string, resourceType db.OperationResourceType, dbQueries db.DatabaseQueries, k8sClient client.Client, log logr.Logger) {
+	engineInstanceDb := db.GitopsEngineInstance{
+		Gitopsengineinstance_id: gitopsengineinstanceId,
+	}
+
+	// Get Gitops Engine Instance to be used for Operation
+	if err := dbQueries.GetGitopsEngineInstanceById(ctx, &engineInstanceDb); err != nil {
+		log.Error(err, "Error occurred in DB Reconciler while fetching GitopsEngineInstance from DB.")
+		return
+	}
+
+	operationDb := db.Operation{
+		Instance_id:   engineInstanceDb.Gitopsengineinstance_id,
+		Resource_id:   resourceId,
+		Resource_type: resourceType,
+	}
+
+	// Get Special user created for internal use,
+	// because we need ClusterUser for creating Operation and we don't have one.
+	// Hence created or get a dummy Cluster User for internal purpose.
+	var specialClusterUser db.ClusterUser
+	if err := dbQueries.GetOrCreateSpecialClusterUser(context.Background(), &specialClusterUser); err != nil {
+		log.Error(err, "unable to fetch special cluster user")
+		return
+	}
+
+	// Create k8s Operation to inform Cluster Agent to delete related k8s CRs
+	if _, _, err := operations.CreateOperation(ctx, false, operationDb,
+		specialClusterUser.Clusteruser_id, namespace, dbQueries, k8sClient, log); err != nil {
+		log.Error(err, "unable to create operation", "operation", operationDb.ShortString())
+	}
 }
