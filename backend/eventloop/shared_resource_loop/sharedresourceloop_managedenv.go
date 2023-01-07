@@ -553,7 +553,7 @@ func createNewManagedEnv(ctx context.Context, managedEnvironment managedgitopsv1
 
 func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string, managedEnvCR *db.ManagedEnvironment, user db.ClusterUser,
 	k8sClientFactory SRLK8sClientFactory, dbQueries db.DatabaseQueries, log logr.Logger) error {
-
+	fmt.Println("11111111111")
 	log = log.WithValues("managedEnvID", managedEnvID)
 
 	// 1) Retrieve all the Applications that reference this ManagedEnvironment
@@ -570,6 +570,7 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 
 	// 2) For each application, nil the managed environment field, then create an operation to instruct the cluster-agent to update the Application
 	for idx := range applications {
+		fmt.Println("*******************11111")
 		app := applications[idx]
 
 		log := log.WithValues("applicationID", app.Application_id)
@@ -584,10 +585,16 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 				gitopsEngineInstance.Gitopsengineinstance_id, managedEnvID, err)
 		}
 
+		fmt.Println("222222222 gitopsEngineInstance === ", gitopsEngineInstance)
+
 		// Add the gitops engine instance key to the map
 		gitopsEngineInstances[app.Engine_instance_inst_id] = *gitopsEngineInstance
 
+		fmt.Println("ctx === ", ctx)
+		fmt.Println("k8sClientFactory === ", k8sClientFactory)
 		client, err := k8sClientFactory.GetK8sClientForGitOpsEngineInstance(ctx, gitopsEngineInstance)
+		fmt.Println("client === ", client)
+		fmt.Println("err === ", err)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve k8s client for engine instance '%s': %v", gitopsEngineInstance.Gitopsengineinstance_id, err)
 		}
@@ -602,14 +609,16 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 		log.Info("Creating operation for updated application, of deleted managed environment")
 
 		// Don't wait for the Operation to complete, just create it and continue with the next.
-		_, _, err = operations.CreateOperation(ctx, false, operation, user.Clusteruser_id,
+		a, b, err := operations.CreateOperation(ctx, false, operation, user.Clusteruser_id,
 			dbutil.GetGitOpsEngineSingleInstanceNamespace(), dbQueries, client, log)
 		// TODO: GITOPSRVCE-174 - Add garbage collection of this operation once 174 is finished.
+		fmt.Println(")))))))))))) a === ", a)
+		fmt.Println(")))))))))))) b === ", b)
 		if err != nil {
 			return fmt.Errorf("unable to create operation for applicaton '%s': %v", app.Application_id, err)
 		}
 	}
-
+	fmt.Println("222222222222222")
 	// 3) Delete all cluster accesses that reference this managed env
 	clusterAccesses := []db.ClusterAccess{}
 	if err := dbQueries.ListClusterAccessesByManagedEnvironmentID(ctx, managedEnvID, &clusterAccesses); err != nil {
@@ -617,6 +626,8 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 		return fmt.Errorf("unable to list cluster accesses by managed id '%s': %v", managedEnvID, err)
 	}
 	for idx := range clusterAccesses {
+		fmt.Println("*******************222222")
+
 		clusterAccess := clusterAccesses[idx]
 
 		rowsDeleted, err := dbQueries.DeleteClusterAccessById(ctx, clusterAccess.Clusteraccess_user_id, managedEnvID, clusterAccess.Clusteraccess_gitops_engine_instance_id)
@@ -632,7 +643,7 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 		log.Info("Deleted ClusterAccess row that referenced to ManagedEnvironment", "userID", clusterAccess.Clusteraccess_user_id, "gitopsEngineInstanceID", clusterAccess.Clusteraccess_gitops_engine_instance_id)
 
 	}
-
+	fmt.Println("333333333333")
 	// 4) Delete the ManagedEnvironment entry
 	rowsDeleted, err := dbQueries.DeleteManagedEnvironmentById(ctx, managedEnvID)
 	if err != nil || rowsDeleted != 1 {
@@ -643,6 +654,7 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 
 	// 5) Delete the cluster credentials row of the managed environment
 	if managedEnvCR != nil {
+		fmt.Println("*******************333333333")
 		log := log.WithValues("clusterCredentialsId", managedEnvCR.Clustercredentials_id)
 
 		rowsDeleted, err = dbQueries.DeleteClusterCredentialsById(ctx, managedEnvCR.Clustercredentials_id)
@@ -652,7 +664,7 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 		}
 		log.Info("Deleted ClusterCredentials of the managed environment")
 	}
-
+	fmt.Println("4444444444444")
 	// 6) For each Argo CD instances that was involved, create a new Operation to delete the managed environment
 	//    (the Argo CD Cluster Secret) of that Argo CD instance.
 	for idx := range gitopsEngineInstances {
@@ -676,13 +688,19 @@ func DeleteManagedEnvironmentResources(ctx context.Context, managedEnvID string,
 		log.Info("Creating Operation to delete Argo CD cluster secret, referencing managed environment")
 
 		// TODO: GITOPSRVCE-174 - Add garbage collection of this operation once 174 is finished.
-		_, _, err = operations.CreateOperation(ctx, false, operation, user.Clusteruser_id,
+		a, b, err := operations.CreateOperation(ctx, false, operation, user.Clusteruser_id,
 			dbutil.GetGitOpsEngineSingleInstanceNamespace(), dbQueries, client, log)
+		fmt.Println("############")
+		fmt.Println("############")
+		fmt.Println("111111 a === ", a)
+		fmt.Println("111111 b === ", b)
+
 		if err != nil {
 			return fmt.Errorf("unable to create operation for deleted managed environment: %v", err)
 		}
-	}
 
+	}
+	fmt.Println("55555555")
 	// Add a field to the database operation: GC after datetime, after which the operation is deleted if completed.
 
 	return nil

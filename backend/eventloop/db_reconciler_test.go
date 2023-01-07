@@ -250,6 +250,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			var clusterCredentialsDb db.ClusterCredentials
 			var managedEnvironmentDb db.ManagedEnvironment
 			var apiCRToDatabaseMappingDb db.APICRToDatabaseMapping
+			var managedEnvCr *managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment
 
 			BeforeEach(func() {
 				scheme,
@@ -288,7 +289,7 @@ var _ = Describe("DB Reconciler Test", func() {
 				Expect(err).To(BeNil())
 
 				// Create GitOpsDeploymentManagedEnvironment CR in cluster
-				managedEnvCr := &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
+				managedEnvCr = &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-env-" + string(uuid.NewUUID()),
 						Namespace: "test-k8s-namespace",
@@ -361,10 +362,16 @@ var _ = Describe("DB Reconciler Test", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
+				// Create DB entry for ClusterCredentials
+				clusterCredentialsDb.Clustercredentials_cred_id = "test-" + string(uuid.NewUUID())
+				err = dbq.CreateClusterCredentials(ctx, &clusterCredentialsDb)
+				Expect(err).To(BeNil())
+
 				// Create another ManagedEnvironment entry
 				managedEnvironmentDbTemp := managedEnvironmentDb
 				managedEnvironmentDb.Name = "test-env-" + string(uuid.NewUUID())
 				managedEnvironmentDb.Managedenvironment_id = "test-" + string(uuid.NewUUID())
+				managedEnvironmentDb.Clustercredentials_id = clusterCredentialsDb.Clustercredentials_cred_id
 				err = dbq.CreateManagedEnvironment(ctx, &managedEnvironmentDb)
 				Expect(err).To(BeNil())
 
