@@ -40,7 +40,8 @@ const (
 // DatabaseReconciler reconciles Database entries
 type DatabaseReconciler struct {
 	client.Client
-	DB db.DatabaseQueries
+	DB               db.DatabaseQueries
+	k8sClientFactory sharedresourceloop.SRLK8sClientFactory
 }
 
 // This function iterates through each entry of DTAM and ACTDM tables in DB and ensures that the required CRs is present in cluster.
@@ -59,7 +60,7 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 
 		_, _ = sharedutil.CatchPanic(func() error {
 			deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
-			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, log)
+			apiCrToDbMappingDbReconcile(ctx, r.DB, r.Client, r.k8sClientFactory, log)
 			return nil
 		})
 
@@ -142,7 +143,7 @@ func deplToAppMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 }
 
 // ApiCrToDbMappingDbReconcile loops through the ACTDM in a database, and verifies they are still valid. If not, the resources are deleted.
-func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
+func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, k8sClientFactory sharedresourceloop.SRLK8sClientFactory, log logr.Logger) {
 	offSet := 0
 	log = log.WithValues("job", "apiCrToDbMappingDbReconcile")
 
@@ -192,8 +193,7 @@ func apiCrToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 						if err := dbQueries.GetManagedEnvironmentById(ctx, &managedEnvDb); err == nil {
 							var specialClusterUser db.ClusterUser
 							if err := dbQueries.GetOrCreateSpecialClusterUser(context.Background(), &specialClusterUser); err == nil {
-								var clientFactory sharedresourceloop.SRLK8sClientFactory
-								if err := sharedresourceloop.DeleteManagedEnvironmentResources(ctx, apiCrToDbMappingFromDB.DBRelationKey, &managedEnvDb, specialClusterUser, clientFactory, dbQueries, log); err != nil {
+								if err := sharedresourceloop.DeleteManagedEnvironmentResources(ctx, apiCrToDbMappingFromDB.DBRelationKey, &managedEnvDb, specialClusterUser, k8sClientFactory, dbQueries, log); err != nil {
 									log.Error(err, "Error occurred in APICRToDatabaseMapping Reconciler while cleaning ManagedEnvironment entry "+apiCrToDbMappingFromDB.DBRelationKey+" from DB.")
 								}
 							}
