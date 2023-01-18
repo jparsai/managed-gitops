@@ -166,7 +166,7 @@ func runNamespaceReconcile(ctx context.Context, dbQueries db.DatabaseQueries, cl
 					continue
 				}
 			}
-			// else { if the managed_enviroment_id row is empty, then we should always create an Operation }
+			// else { if the managed_enviroment_id row is empty, then continue executing below as we should always create an Operation in this case }
 
 			// At this point application from ArgoCD and DB are not in Sync (or the managed env is empty),
 			// so need to update Argo CD Application resource according to DB entry.

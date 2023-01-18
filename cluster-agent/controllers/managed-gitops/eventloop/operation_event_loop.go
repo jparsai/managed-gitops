@@ -762,11 +762,6 @@ func processOperation_Application(ctx context.Context, dbOperation db.Operation,
 		}
 	}
 
-	// If the Application row has an empty managed environment, then delete the Argo CD Application CR, and return
-	if dbApplication.Managed_environment_id == "" {
-		return deleteArgoCDApplicationOfDeletedApplicationRow(ctx, dbApplication.Application_id, opConfig, log)
-	}
-
 	log = log.WithValues("argoCDApplicationName", dbApplication.Name)
 
 	app := &appv1.Application{
