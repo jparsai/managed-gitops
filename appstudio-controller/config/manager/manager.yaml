@@ -37,6 +37,9 @@ spec:
         ports:
           - containerPort: 8080
             name: http-metrics
+          - containerPort: 9443
+            name: webhook-server
+            protocol: TCP
         image: ${COMMON_IMAGE}
         name: manager
         securityContext:
