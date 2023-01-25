@@ -4,6 +4,8 @@ kind: ValidatingWebhookConfiguration
 metadata:
   creationTimestamp: null
   name: validating-webhook-configuration
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
 webhooks:
 - admissionReviewVersions:
   - v1
