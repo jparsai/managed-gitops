@@ -143,6 +143,15 @@ func main() {
 			os.Exit(1)
 		}
 
+		if err = (&applicationv1alpha1.SnapshotEnvironmentBinding{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SnapshotEnvironmentBinding")
+			os.Exit(1)
+		}
+
+		if err = (&applicationv1alpha1.PromotionRun{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "PromotionRun")
+			os.Exit(1)
+		}
 	}
 
 	//+kubebuilder:scaffold:builder
