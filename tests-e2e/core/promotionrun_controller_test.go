@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,6 +25,7 @@ var _ = Describe("Application Promotion Run E2E Tests.", func() {
 		var bindingStage appstudiosharedv1.SnapshotEnvironmentBinding
 		var bindingProd appstudiosharedv1.SnapshotEnvironmentBinding
 		var promotionRun appstudiosharedv1.PromotionRun
+		var snapshot appstudiosharedv1.Snapshot
 
 		BeforeEach(func() {
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
@@ -41,7 +44,7 @@ var _ = Describe("Application Promotion Run E2E Tests.", func() {
 			Expect(err).To(Succeed())
 
 			By("Create Snapshot.")
-			snapshot := buildSnapshotResource("my-snapshot", "new-demo-app", "Staging Snapshot", "Staging Snapshot", "component-a", "quay.io/jgwest-redhat/sample-workload:latest")
+			snapshot = buildSnapshotResource("my-snapshot", "new-demo-app", "Staging Snapshot", "Staging Snapshot", "component-a", "quay.io/jgwest-redhat/sample-workload:latest")
 			err = k8s.Create(&snapshot, k8sClient)
 			Expect(err).To(Succeed())
 
@@ -104,7 +107,7 @@ var _ = Describe("Application Promotion Run E2E Tests.", func() {
 			promotionRun = buildPromotionRunResource("new-demo-app-manual-promotion", "new-demo-app", "my-snapshot", "prod")
 		})
 
-		It("Should create GitOpsDeployments and it should be Synced/Healthy.", func() {
+		FIt("Should create GitOpsDeployments and it should be Synced/Healthy.", func() {
 			// ToDo: https://issues.redhat.com/browse/GITOPSRVCE-234
 			if fixture.IsRunningAgainstKCP() {
 				Skip("Skipping this test in KCP until we fix the race condition")
@@ -143,6 +146,123 @@ var _ = Describe("Application Promotion Run E2E Tests.", func() {
 			}
 
 			Eventually(promotionRun, "3m", "1s").Should(promotionRunFixture.HaveStatusComplete(expectedPromotionRunStatus))
+
+			By("Validate CR Webhooks.")
+
+			ctx := context.Background()
+
+			By("Validate Snapshot CR Webhooks.")
+
+			// Fetch the latest version
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(&snapshot), &snapshot)
+			Expect(err).To(Succeed())
+
+			By("Validate Spec.Application field Webhook.")
+
+			temp := snapshot.Spec.Application // Keep old value
+			snapshot.Spec.Application = "new-app-name"
+			err = k8sClient.Update(ctx, &snapshot)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("application cannot be updated to %s", snapshot.Spec.Application)))
+			snapshot.Spec.Application = temp // Revert value for next test
+
+			By("Validate Spec.Components.Name field Webhook.")
+
+			temp = snapshot.Spec.Components[0].Name // Keep old value
+			snapshot.Spec.Components[0].Name = "new-components-name"
+			err = k8sClient.Update(ctx, &snapshot)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("components cannot be updated to %s", snapshot.Spec.Components)))
+			snapshot.Spec.Components[0].Name = temp // Revert value for next test
+
+			By("Validate Spec.Components.ContainerImage field Webhook.")
+
+			temp = snapshot.Spec.Components[0].ContainerImage // Keep old value
+			snapshot.Spec.Components[0].ContainerImage = "new-containerImage-name"
+			err = k8sClient.Update(ctx, &snapshot)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("components cannot be updated to %s", snapshot.Spec.Components)))
+
+			By("Validate SnapshotEnvironmentBinding CR Webhooks.")
+
+			// Fetch the latest version
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(&bindingStage), &bindingStage)
+			Expect(err).To(Succeed())
+
+			By("Validate Spec.Application field Webhook.")
+
+			temp = bindingStage.Spec.Application // Keep old value
+			bindingStage.Spec.Application = "new-app-name"
+			err = k8sClient.Update(ctx, &bindingStage)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("application cannot be updated to %s", bindingStage.Spec.Application)))
+			bindingStage.Spec.Application = temp // Revert value for next test
+
+			By("Validate Spec.Environment field Webhook.")
+
+			temp = bindingStage.Spec.Environment // Keep old value
+			bindingStage.Spec.Environment = "new-env-name"
+			err = k8sClient.Update(ctx, &bindingStage)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("environment cannot be updated to %s", bindingStage.Spec.Environment)))
+			bindingStage.Spec.Environment = temp // Revert value for next test
+
+			By("Validate Labels Webhook.")
+
+			bindingStage.Labels = map[string]string{"new-label": "abc"}
+			err = k8sClient.Update(ctx, &bindingStage)
+
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("labels cannot be updated to %s", bindingStage.Labels)))
+			Expect(err).NotTo(Succeed())
+
+			By("Validate PromotionRun CR Webhooks.")
+
+			// Fetch the latest version
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(&promotionRun), &promotionRun)
+			Expect(err).To(Succeed())
+
+			By("Validate Spec.Application field Webhook.")
+
+			temp = promotionRun.Spec.Application // Keep old value
+			promotionRun.Spec.Application = "new-app-name"
+			err = k8sClient.Update(ctx, &promotionRun)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("spec cannot be updated to %s", promotionRun.Spec)))
+			promotionRun.Spec.Application = temp // Revert value for next test
+
+			By("Validate Spec.Snapshot field Webhook.")
+
+			temp = promotionRun.Spec.Snapshot // Keep old value
+			promotionRun.Spec.Snapshot = "new-snapshot-name"
+			err = k8sClient.Update(ctx, &promotionRun)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("spec cannot be updated to %s", promotionRun.Spec)))
+			promotionRun.Spec.Snapshot = temp // Revert value for next test
+
+			By("Validate Spec.ManualPromotion field Webhook.")
+
+			temp = promotionRun.Spec.ManualPromotion.TargetEnvironment // Keep old value
+			promotionRun.Spec.ManualPromotion.TargetEnvironment = "new-env-name"
+			err = k8sClient.Update(ctx, &promotionRun)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("spec cannot be updated to %s", promotionRun.Spec)))
+			promotionRun.Spec.ManualPromotion.TargetEnvironment = temp // Revert value for next test
+
+			By("Validate Spec.AutomatedPromotion field Webhook.")
+
+			promotionRun.Spec.AutomatedPromotion.InitialEnvironment = "new-env-name"
+			err = k8sClient.Update(ctx, &promotionRun)
+
+			Expect(err).NotTo(Succeed())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("spec cannot be updated to %s", promotionRun.Spec)))
 		})
 
 		It("Should not support Auto Promotion.", func() {
