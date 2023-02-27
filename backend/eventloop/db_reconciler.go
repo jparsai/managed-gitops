@@ -6,13 +6,16 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	db "github.com/redhat-appstudio/managed-gitops/backend-shared/db"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
+	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/fauxargocd"
 	"github.com/redhat-appstudio/managed-gitops/backend-shared/util/operations"
 	sharedresourceloop "github.com/redhat-appstudio/managed-gitops/backend/eventloop/shared_resource_loop"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +23,7 @@ import (
 )
 
 const (
-	appRowBatchSize            = 50               // Number of rows needs to be fetched in each batch.
+	appRowBatchSize            = 100              // Number of rows needs to be fetched in each batch.
 	databaseReconcilerInterval = 30 * time.Minute // Interval in Minutes to reconcile Database.
 	sleepIntervalsOfBatches    = 1 * time.Second  // Interval in Millisecond between each batch.
 )
@@ -60,7 +63,10 @@ func (r *DatabaseReconciler) startTimerForNextCycle() {
 
 		_, _ = sharedutil.CatchPanic(func() error {
 			deplToAppMappingDbReconcile(ctx, r.DB, r.Client, log)
+
 			apiCRToDbMappingDbReconcile(ctx, r.DB, r.Client, r.K8sClientFactory, log)
+
+			applicationDbReconcile(ctx, r.DB, r.Client, log)
 			return nil
 		})
 
@@ -193,6 +199,95 @@ func apiCRToDbMappingDbReconcile(ctx context.Context, dbQueries db.DatabaseQueri
 			}
 
 			log.Info("ACTDM Reconcile processed APICRToDatabaseMapping entry: " + apiCrToDbMappingFromDB.APIResourceUID)
+		}
+
+		// Skip processed entries in next iteration
+		offSet += appRowBatchSize
+	}
+}
+
+func applicationDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, client client.Client, log logr.Logger) {
+
+	log = log.WithValues("job", "applicationDbReconcile")
+	offSet := 0
+	var listOfAppsInDeplToAppMapping []string
+
+	// Get list of Applications having entry in DTAM table
+	for {
+		if offSet != 0 {
+			time.Sleep(sleepIntervalsOfBatches)
+		}
+
+		var tempList []db.DeploymentToApplicationMapping
+
+		// Fetch DeploymentToApplicationMapping table entries in batch size as configured above.​
+		if err := dbQueries.GetDeploymentToApplicationMappingBatch(ctx, &tempList, appRowBatchSize, offSet); err != nil {
+			log.Error(err, fmt.Sprintf("Error occurred in Application DB Reconcile while fetching batch from Offset: %d to %d: ",
+				offSet, offSet+appRowBatchSize))
+			break
+		}
+
+		// Break the loop if no entries are left in table to be processed.
+		if len(tempList) == 0 {
+			break
+		}
+
+		for _, deplToAppMapping := range tempList {
+			listOfAppsInDeplToAppMapping = append(listOfAppsInDeplToAppMapping, deplToAppMapping.Application_id)
+		}
+
+		// Skip processed entries in next iteration
+		offSet += appRowBatchSize
+	}
+
+	offSet = 0
+	// Continuously iterate and fetch batches until all entries of Application table are processed.
+	for {
+		if offSet != 0 {
+			time.Sleep(sleepIntervalsOfBatches)
+		}
+
+		var listOfApplicationsFromDB []db.Application
+
+		// Fetch Application table entries in batch size as configured above.​
+		if err := dbQueries.GetApplicationBatch(ctx, &listOfApplicationsFromDB, appRowBatchSize, offSet); err != nil {
+			log.Error(err, fmt.Sprintf("Error occurred in Application DB Reconcile while fetching batch from Offset: %d to %d: ",
+				offSet, offSet+appRowBatchSize))
+			break
+		}
+
+		// Break the loop if no entries are left in table to be processed.
+		if len(listOfApplicationsFromDB) == 0 {
+			log.Info("All Application entries are processed by Application DB Reconcile.")
+			break
+		}
+
+		// Iterate over batch received above.
+		for _, appDB := range listOfApplicationsFromDB {
+
+			// Check if application has entry in DTAM table, if not then delete the application
+			if !slices.Contains(listOfAppsInDeplToAppMapping, appDB.Application_id) && time.Now().Sub(appDB.Created_on).Hours() > 1 {
+
+				var appArgo fauxargocd.FauxApplication
+
+				// Fetch the Application object from DB
+				if err := yaml.Unmarshal([]byte(appDB.Spec_field), &appArgo); err != nil {
+					log.Error(err, "Error occurred in Application DB Reconcile while unmarshalling application: "+appDB.Application_id)
+					continue // Skip to next iteration instead of stopping the entire loop.
+				}
+
+				_, err := dbQueries.DeleteApplicationById(ctx, appDB.Application_id)
+
+				if err != nil {
+					log.Error(err, "Error occurred in Application DB Reconcile while cleaning Application entry "+appDB.Application_id+" from DB.")
+					continue
+				} else {
+					log.Info("Application entry: " + appDB.Application_id + " is successfully deleted by Application DB Reconcile.")
+				}
+
+				// Create k8s Operation to delete related CRs using Cluster Agent
+				createOperation(ctx, appDB.Engine_instance_inst_id, appDB.Application_id, appArgo.Namespace, db.OperationResourceType_Application, dbQueries, client, log)
+			}
 		}
 
 		// Skip processed entries in next iteration
