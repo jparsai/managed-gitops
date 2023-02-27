@@ -2,6 +2,7 @@ package eventloop
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -897,6 +898,136 @@ var _ = Describe("DB Reconciler Test", func() {
 				err = dbq.GetAPICRForDatabaseUID(ctx, &apiCRToDatabaseMappingDb)
 				Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 			})
+		})
+	})
+
+	Context("Testing Reconcile for Application table entries.", func() {
+
+		var log logr.Logger
+		var ctx context.Context
+		var dbq db.AllDatabaseQueries
+		var k8sClient client.WithWatch
+		var application db.Application
+		var managedEnvironment *db.ManagedEnvironment
+		var gitopsEngineInstance *db.GitopsEngineInstance
+		var deploymentToApplicationMapping db.DeploymentToApplicationMapping
+
+		BeforeEach(func() {
+			scheme,
+				argocdNamespace,
+				kubesystemNamespace,
+				apiNamespace,
+				err := tests.GenericTestSetup()
+			Expect(err).To(BeNil())
+
+			// Create fake client
+			k8sClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
+
+			err = db.SetupForTestingDBGinkgo()
+			Expect(err).To(BeNil())
+
+			ctx = context.Background()
+			log = logger.FromContext(ctx)
+			dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+			Expect(err).To(BeNil())
+
+			_, managedEnvironment, _, gitopsEngineInstance, _, err = db.CreateSampleData(dbq)
+			Expect(err).To(BeNil())
+
+			// Create Application entry
+			application = db.Application{
+				Application_id:          "test-" + string(uuid.NewUUID()),
+				Name:                    "test-" + string(uuid.NewUUID()),
+				Spec_field:              "{}",
+				Engine_instance_inst_id: gitopsEngineInstance.Gitopsengineinstance_id,
+				Managed_environment_id:  managedEnvironment.Managedenvironment_id,
+			}
+			err = dbq.CreateApplication(ctx, &application)
+			Expect(err).To(BeNil())
+
+			// Create DeploymentToApplicationMapping entry
+			deploymentToApplicationMapping = db.DeploymentToApplicationMapping{
+				Deploymenttoapplicationmapping_uid_id: "test-" + string(uuid.NewUUID()),
+				Application_id:                        application.Application_id,
+				DeploymentName:                        "test-depl-" + string(uuid.NewUUID()),
+				DeploymentNamespace:                   "test-ns-" + string(uuid.NewUUID()),
+				NamespaceUID:                          string(uuid.NewUUID()),
+			}
+			err = dbq.CreateDeploymentToApplicationMapping(ctx, &deploymentToApplicationMapping)
+			Expect(err).To(BeNil())
+		})
+
+		FIt("Should not delete application entry if its DTAM entry is available.", func() {
+			defer dbq.CloseDatabase()
+
+			applicationDbReconcile(ctx, dbq, k8sClient, log)
+
+			By("Verify that no entry is deleted from DB.")
+
+			err := dbq.GetApplicationById(ctx, &application)
+			Expect(err).To(BeNil())
+		})
+
+		FIt("Should delete application entry if its DTAM entry is not available.", func() {
+			defer dbq.CloseDatabase()
+
+			// Create Application entry
+			applicationNew := db.Application{
+				Application_id:          "test-" + string(uuid.NewUUID()),
+				Name:                    "test-" + string(uuid.NewUUID()),
+				Spec_field:              "{}",
+				Engine_instance_inst_id: gitopsEngineInstance.Gitopsengineinstance_id,
+				Managed_environment_id:  managedEnvironment.Managedenvironment_id,
+			}
+
+			err := dbq.CreateApplication(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			err = dbq.GetApplicationById(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			applicationNew.Created_on = time.Now().Add(time.Duration(-2) * time.Hour)
+
+			err = dbq.UpdateApplication(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			applicationDbReconcile(ctx, dbq, k8sClient, log)
+
+			err = dbq.GetApplicationById(ctx, &applicationNew)
+			Expect(err).NotTo(BeNil())
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+		})
+
+		FIt("Should not delete application entry if its DTAM entry is not available, but created time is less than 1 hour.", func() {
+			defer dbq.CloseDatabase()
+
+			// Create Application entry
+			applicationNew := db.Application{
+				Application_id:          "test-" + string(uuid.NewUUID()),
+				Name:                    "test-" + string(uuid.NewUUID()),
+				Spec_field:              "{}",
+				Engine_instance_inst_id: gitopsEngineInstance.Gitopsengineinstance_id,
+				Managed_environment_id:  managedEnvironment.Managedenvironment_id,
+			}
+
+			err := dbq.CreateApplication(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			err = dbq.GetApplicationById(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			applicationNew.Created_on = time.Now().Add(time.Duration(-30) * time.Minute)
+
+			err = dbq.UpdateApplication(ctx, &applicationNew)
+			Expect(err).To(BeNil())
+
+			applicationDbReconcile(ctx, dbq, k8sClient, log)
+
+			err = dbq.GetApplicationById(ctx, &applicationNew)
+			Expect(err).To(BeNil())
 		})
 	})
 })
