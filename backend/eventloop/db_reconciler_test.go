@@ -960,7 +960,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(err).To(BeNil())
 		})
 
-		FIt("Should not delete application entry if its DTAM entry is available.", func() {
+		It("Should not delete application entry if its DTAM entry is available.", func() {
 			defer dbq.CloseDatabase()
 
 			applicationDbReconcile(ctx, dbq, k8sClient, log)
@@ -971,7 +971,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(err).To(BeNil())
 		})
 
-		FIt("Should delete application entry if its DTAM entry is not available.", func() {
+		It("Should delete application entry if its DTAM entry is not available.", func() {
 			defer dbq.CloseDatabase()
 
 			// Create Application entry
@@ -989,7 +989,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			err = dbq.GetApplicationById(ctx, &applicationNew)
 			Expect(err).To(BeNil())
 
-			applicationNew.Created_on = time.Now().Add(time.Duration(-2) * time.Hour)
+			applicationNew.Created_on = time.Now().Add(time.Duration(-(waitTimeforRowDelete + 1)) * time.Hour)
 
 			err = dbq.UpdateApplication(ctx, &applicationNew)
 			Expect(err).To(BeNil())
@@ -1001,7 +1001,7 @@ var _ = Describe("DB Reconciler Test", func() {
 			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
 		})
 
-		FIt("Should not delete application entry if its DTAM entry is not available, but created time is less than 1 hour.", func() {
+		It("Should not delete application entry if its DTAM entry is not available, but created time is less than 1 hour.", func() {
 			defer dbq.CloseDatabase()
 
 			// Create Application entry

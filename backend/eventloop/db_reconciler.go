@@ -26,6 +26,7 @@ const (
 	appRowBatchSize            = 100              // Number of rows needs to be fetched in each batch.
 	databaseReconcilerInterval = 30 * time.Minute // Interval in Minutes to reconcile Database.
 	sleepIntervalsOfBatches    = 1 * time.Second  // Interval in Millisecond between each batch.
+	waitTimeforRowDelete       = 1                // Number of hours to wait before deleting DB row
 )
 
 // A 'dangling' DB entry (for lack of a better term) is a DeploymentToApplicationMapping (DTAM) or APICRToDatabaseMapping (ACTDM)
@@ -266,7 +267,7 @@ func applicationDbReconcile(ctx context.Context, dbQueries db.DatabaseQueries, c
 		for _, appDB := range listOfApplicationsFromDB {
 
 			// Check if application has entry in DTAM table, if not then delete the application
-			if !slices.Contains(listOfAppsInDeplToAppMapping, appDB.Application_id) && time.Now().Sub(appDB.Created_on).Hours() > 1 {
+			if !slices.Contains(listOfAppsInDeplToAppMapping, appDB.Application_id) && time.Now().Sub(appDB.Created_on).Hours() > waitTimeforRowDelete {
 
 				var appArgo fauxargocd.FauxApplication
 
