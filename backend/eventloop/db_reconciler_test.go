@@ -23,7 +23,7 @@ import (
 )
 
 var _ = Describe("DB Clean-up Function Tests", func() {
-	Context("Testing cleanOrphanedEntriesfromDTAMTable function.", func() {
+	Context("Testing cleanOrphanedEntriesfromTable_DTAM function.", func() {
 
 		var log logr.Logger
 		var ctx context.Context
@@ -125,8 +125,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 		It("Should not delete any of the database entries as long as the GitOpsDeployment CR is present in cluster, and the UID matches the DTAM value", func() {
 			defer dbq.CloseDatabase()
 
-			By("Call cleanOrphanedEntriesfromDTAMTable function to check delete DB entries if GitOpsDeployment CR is not present.")
-			cleanOrphanedEntriesfromDTAMTable(ctx, dbq, k8sClient, log)
+			By("Call cleanOrphanedEntriesfromTable_DTAM function to check delete DB entries if GitOpsDeployment CR is not present.")
+			cleanOrphanedEntriesfromTable_DTAM(ctx, dbq, k8sClient, log)
 
 			By("Verify that no entry is deleted from DB.")
 			err := dbq.GetApplicationStateById(ctx, &applicationState)
@@ -175,8 +175,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 			err = dbq.CreateSyncOperation(ctx, &syncOperationOne)
 			Expect(err).To(BeNil())
 
-			By("Call cleanOrphanedEntriesfromDTAMTable function to check/delete DB entries if GitOpsDeployment CR is not present.")
-			cleanOrphanedEntriesfromDTAMTable(ctx, dbq, k8sClient, log)
+			By("Call cleanOrphanedEntriesfromTable_DTAM function to check/delete DB entries if GitOpsDeployment CR is not present.")
+			cleanOrphanedEntriesfromTable_DTAM(ctx, dbq, k8sClient, log)
 
 			By("Verify that entries for the GitOpsDeployment which is available in cluster, are not deleted from DB.")
 
@@ -222,8 +222,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 			Expect(err).To(BeNil())
 			Expect(gitopsDepl.UID).To(Equal(newUID))
 
-			By("calling cleanOrphanedEntriesfromDTAMTable function to check delete DB entries if GitOpsDeployment CR is not present.")
-			cleanOrphanedEntriesfromDTAMTable(ctx, dbq, k8sClient, log)
+			By("calling cleanOrphanedEntriesfromTable_DTAM function to check delete DB entries if GitOpsDeployment CR is not present.")
+			cleanOrphanedEntriesfromTable_DTAM(ctx, dbq, k8sClient, log)
 
 			By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
 
@@ -243,8 +243,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 		})
 	})
 
-	Context("Testing cleanOrphanedEntriesfromACTDMTable function.", func() {
-		Context("Testing cleanOrphanedEntriesfromACTDMTable function for ManagedEnvironment CR.", func() {
+	Context("Testing cleanOrphanedEntriesfromTable_ACTDM function.", func() {
+		Context("Testing cleanOrphanedEntriesfromTable_ACTDM function for ManagedEnvironment CR.", func() {
 			var log logr.Logger
 			var ctx context.Context
 			var dbq db.AllDatabaseQueries
@@ -347,8 +347,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that no entry is deleted from DB.")
 				err = dbq.GetManagedEnvironmentById(ctx, &managedEnvironmentDb)
@@ -385,8 +385,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the ManagedEnvironment which is not available in cluster, are deleted from DB.")
 
@@ -413,8 +413,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the ManagedEnvironment which is not available in cluster, are deleted from DB.")
 
@@ -466,8 +466,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateApplication(ctx, applicationDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, MockSRLK8sClientFactory{fakeClient: k8sClient}, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, MockSRLK8sClientFactory{fakeClient: k8sClient}, log)
 
 				By("Verify that entries for the ManagedEnvironment which is not available in cluster, are deleted from DB.")
 
@@ -495,7 +495,7 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 			})
 		})
 
-		Context("Testing cleanOrphanedEntriesfromACTDMTable function for RepositoryCredential CR.", func() {
+		Context("Testing cleanOrphanedEntriesfromTable_ACTDM function for RepositoryCredential CR.", func() {
 			var log logr.Logger
 			var ctx context.Context
 			var dbq db.AllDatabaseQueries
@@ -604,8 +604,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that no entry is deleted from DB.")
 				_, err = dbq.GetRepositoryCredentialsByID(ctx, gitopsRepositoryCredentialsDb.RepositoryCredentialsID)
@@ -635,8 +635,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the GitOpsDeployment which is not available in cluster, are deleted from DB.")
 
@@ -692,8 +692,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the RepositoryCredentials which is not available in cluster, are deleted from DB.")
 
@@ -705,7 +705,7 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 			})
 		})
 
-		Context("Testing cleanOrphanedEntriesfromACTDMTable function for GitOpsDeploymentSyncRun CR.", func() {
+		Context("Testing cleanOrphanedEntriesfromTable_ACTDM function for GitOpsDeploymentSyncRun CR.", func() {
 			var log logr.Logger
 			var ctx context.Context
 			var dbq db.AllDatabaseQueries
@@ -799,8 +799,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err := dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that no entry is deleted from DB.")
 				err = dbq.GetSyncOperationById(ctx, &syncOperationDb)
@@ -830,8 +830,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the GitOpsDeploymentSyncRun which is not available in cluster, are deleted from DB.")
 
@@ -887,8 +887,8 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 				err = dbq.CreateAPICRToDatabaseMapping(ctx, &apiCRToDatabaseMappingDb)
 				Expect(err).To(BeNil())
 
-				By("Call cleanOrphanedEntriesfromACTDMTable function.")
-				cleanOrphanedEntriesfromACTDMTable(ctx, dbq, k8sClient, nil, log)
+				By("Call cleanOrphanedEntriesfromTable_ACTDM function.")
+				cleanOrphanedEntriesfromTable_ACTDM(ctx, dbq, k8sClient, nil, log)
 
 				By("Verify that entries for the GitOpsDeploymentSyncRun which is not available in cluster, are deleted from DB.")
 
