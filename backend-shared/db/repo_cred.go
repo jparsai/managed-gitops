@@ -121,3 +121,20 @@ func (obj *RepositoryCredentials) Dispose(ctx context.Context, dbq DatabaseQueri
 	_, err := dbq.DeleteRepositoryCredentialsByID(ctx, obj.RepositoryCredentialsID)
 	return err
 }
+
+// Get RepositoryCredentials in a batch. Batch size defined by 'limit' and starting point of batch is defined by 'offSet'.
+// For example if you want applications starting from 51-150 then set the limit to 100 and offset to 50.
+func (dbq *PostgreSQLDatabaseQueries) GetRepositoryCredentialsBatch(ctx context.Context, repositoryCredentials *[]RepositoryCredentials, limit, offSet int) error {
+	err := dbq.dbConnection.
+		Model(repositoryCredentials).
+		Order("seq_id ASC").
+		Limit(limit).   // Batch size
+		Offset(offSet). // offset+1 is starting point of batch
+		Context(ctx).
+		Select()
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
