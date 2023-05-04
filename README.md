@@ -58,3 +58,4 @@ If you like to contribute to GitOps Managed Service, please be so kind to read o
 [routes]: https://github.com/redhat-appstudio/managed-gitops/tree/main/backend/routes
 [Design]: https://docs.google.com/document/d/1e1UwCbwK-Ew5ODWedqp_jZmhiZzYWaxEvIL-tqebMzo/edit#heading=h.s0hdo22ap5cp
 [Google Drive]: https://drive.google.com/drive/u/0/folders/1p_yIOJ1WLu-lqz-BVDn076l1K1pEOc1d
+
