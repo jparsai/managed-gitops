@@ -118,6 +118,15 @@ type DatabaseQueries interface {
 	// Get ManagedEnvironment in a batch. Batch size defined by 'limit' and starting point of batch is defined by 'offSet'.
 	GetManagedEnvironmentBatch(ctx context.Context, managedEnvironments *[]ManagedEnvironment, limit, offSet int) error
 
+	// Get ClusterAccess in a batch. Batch size defined by 'limit' and starting point of batch is defined by 'offSet'.
+	GetClusterAccessBatch(ctx context.Context, clusterAccess *[]ClusterAccess, limit, offSet int) error
+
+	// Get ClusterUser in a batch. Batch size defined by 'limit' and starting point of batch is defined by 'offSet'.
+	GetClusterUserBatch(ctx context.Context, clusterUser *[]ClusterUser, limit, offSet int) error
+
+	// Get GitopsEngineCluster in a batch. Batch size defined by 'limit' and starting point of batch is defined by 'offSet'.
+	GetGitopsEngineClusterBatch(ctx context.Context, gitopsEngineCluster *[]GitopsEngineCluster, limit, offSet int) error
+
 	DeleteKubernetesResourceToDBResourceMapping(ctx context.Context, obj *KubernetesToDBResourceMapping) (int, error)
 	DeleteClusterCredentialsById(ctx context.Context, id string) (int, error)
 	DeleteClusterUserById(ctx context.Context, id string) (int, error)

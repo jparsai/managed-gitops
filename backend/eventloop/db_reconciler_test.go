@@ -2,6 +2,7 @@ package eventloop
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -1648,6 +1649,171 @@ var _ = Describe("DB Clean-up Function Tests", func() {
 			Expect(err).ToNot(BeNil(), "the ManagedEnvironment should no longer exist, after the KubernetesToDBResourceMapping was deleted")
 			Expect(db.IsResultNotFoundError(err)).To(BeTrue(), "the ManagedEnvironment should no longer exist, after the KubernetesToDBResourceMapping was deleted")
 
+		})
+
+	})
+
+	Context("Testing cleanOrphanedEntriesfromTable_ClusterUser function for ClusterUser table entries.", func() {
+
+		var log logr.Logger
+		var ctx context.Context
+		var user db.ClusterUser
+		var dbq db.AllDatabaseQueries
+		var k8sClient client.WithWatch
+
+		BeforeEach(func() {
+			scheme,
+				argocdNamespace,
+				kubesystemNamespace,
+				apiNamespace,
+				err := tests.GenericTestSetup()
+			Expect(err).To(BeNil())
+
+			// Create fake client
+			k8sClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(apiNamespace, argocdNamespace, kubesystemNamespace).
+				Build()
+
+			err = db.SetupForTestingDBGinkgo()
+			Expect(err).To(BeNil())
+
+			ctx = context.Background()
+			log = logger.FromContext(ctx)
+			dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+			Expect(err).To(BeNil())
+
+			By("Create required DB entries.")
+
+			user = db.ClusterUser{
+				Clusteruser_id: "test-id-" + string(uuid.NewUUID()),
+				User_name:      "test-name-" + string(uuid.NewUUID()),
+			}
+
+		})
+
+		It("Should delete ClusterUser if it is not used in any other table and it's created time is more than 'waitTimeforRowDelete'.", func() {
+
+			defer dbq.CloseDatabase()
+
+			// Set "Created_on" field to more than 23 Hours
+			user.Created_on = time.Now().Add(time.Duration(-23) * time.Hour)
+
+			By("Create Cluster user.")
+
+			err := dbq.CreateClusterUser(ctx, &user)
+			Expect(err).To(BeNil())
+
+			By("Call clean-up function.")
+
+			cleanOrphanedEntriesfromTable_ClusterUser(ctx, dbq, k8sClient, true, log)
+
+			By("Verify that ClusterUser entry is deleted from DB.")
+
+			err = dbq.GetClusterUserByUsername(ctx, &user)
+			Expect(err).NotTo(BeNil())
+			Expect(db.IsResultNotFoundError(err)).To(BeTrue())
+		})
+
+		It("Should not delete ClusterUser if it is not used in any other table but it's created time is less than 'waitTimeforRowDelete'.", func() {
+
+			defer dbq.CloseDatabase()
+
+			By("Create Cluster user.")
+
+			err := dbq.CreateClusterUser(ctx, &user)
+			Expect(err).To(BeNil())
+
+			By("Call clean-up function.")
+
+			cleanOrphanedEntriesfromTable_ClusterUser(ctx, dbq, k8sClient, true, log)
+
+			By("Verify that no entry is deleted from DB.")
+
+			err = dbq.GetClusterUserByUsername(ctx, &user)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should not delete ClusterUser if it is used in ClusterAccess entry.", func() {
+
+			defer dbq.CloseDatabase()
+
+			// Set "Created_on" field to more than 23 Hours
+			user.Created_on = time.Now().Add(time.Duration(-23) * time.Hour)
+
+			By("Create Cluster user.")
+
+			err := dbq.CreateClusterUser(ctx, &user)
+			Expect(err).To(BeNil())
+
+			fmt.Println("## user == ", user.Clusteruser_id)
+
+			By("Create required DB entries.")
+
+			_, managedEnvironment, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
+			Expect(err).To(BeNil())
+
+			clusterAccess := db.ClusterAccess{
+				Clusteraccess_user_id:                   user.Clusteruser_id,
+				Clusteraccess_managed_environment_id:    managedEnvironment.Managedenvironment_id,
+				Clusteraccess_gitops_engine_instance_id: gitopsEngineInstance.Gitopsengineinstance_id,
+			}
+
+			err = dbq.CreateClusterAccess(ctx, &clusterAccess)
+			Expect(err).To(BeNil())
+
+			By("Call clean-up function.")
+
+			cleanOrphanedEntriesfromTable_ClusterUser(ctx, dbq, k8sClient, true, log)
+
+			By("Verify that no entry is deleted from DB.")
+
+			err = dbq.GetClusterUserByUsername(ctx, &user)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should not delete ClusterUser if it is used in RepositoryCredentials entry.", func() {
+
+			defer dbq.CloseDatabase()
+
+			// Set "Created_on" field to more than 23 Hours
+			user.Created_on = time.Now().Add(time.Duration(-23) * time.Hour)
+
+			By("Create Cluster user.")
+
+			err := dbq.CreateClusterUser(ctx, &user)
+			Expect(err).To(BeNil())
+
+			fmt.Println("## user == ", user.Clusteruser_id)
+
+			By("Create required DB entries.")
+
+			_, _, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
+			Expect(err).To(BeNil())
+
+			gitopsRepositoryCredentials := db.RepositoryCredentials{
+				RepositoryCredentialsID: "test-repo-cred-id",
+				UserID:                  user.Clusteruser_id,
+				PrivateURL:              "https://test-private-url",
+				AuthUsername:            "test-auth-username",
+				AuthPassword:            "test-auth-password",
+				AuthSSHKey:              "test-auth-ssh-key",
+				SecretObj:               "test-secret-obj",
+				EngineClusterID:         gitopsEngineInstance.Gitopsengineinstance_id, // constrain 'fk_gitopsengineinstance_id'
+			}
+
+			By("Inserting the RepositoryCredentials object to the database")
+			err = dbq.CreateRepositoryCredentials(ctx, &gitopsRepositoryCredentials)
+			Expect(err).To(BeNil())
+
+			By("Call clean-up function.")
+
+			cleanOrphanedEntriesfromTable_ClusterUser(ctx, dbq, k8sClient, true, log)
+
+			By("Verify that no entry is deleted from DB.")
+
+			err = dbq.GetClusterUserByUsername(ctx, &user)
+			Expect(err).To(BeNil())
 		})
 
 	})

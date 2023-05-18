@@ -584,6 +584,15 @@ func (cdb *ChaosDBClient) GetOrCreateSpecialClusterUser(ctx context.Context, clu
 
 }
 
+func (cdb *ChaosDBClient) GetClusterUserBatch(ctx context.Context, clusterUser *[]ClusterUser, limit, offSet int) error {
+
+	if err := shouldSimulateFailure("GetClusterUserBatch", clusterUser, limit, offSet); err != nil {
+		return err
+	}
+
+	return cdb.InnerClient.GetClusterUserBatch(ctx, clusterUser, limit, offSet)
+}
+
 func (cdb *ChaosDBClient) CheckedGetGitopsEngineClusterById(ctx context.Context, gitopsEngineCluster *GitopsEngineCluster, ownerId string) error {
 
 	if err := shouldSimulateFailure("CheckedGetGitopsEngineClusterById", gitopsEngineCluster, ownerId); err != nil {
@@ -662,6 +671,15 @@ func (cdb *ChaosDBClient) GetGitopsEngineClusterById(ctx context.Context, gitops
 
 	return cdb.InnerClient.GetGitopsEngineClusterById(ctx, gitopsEngineCluster)
 
+}
+
+func (cdb *ChaosDBClient) GetGitopsEngineClusterBatch(ctx context.Context, gitopsEngineCluster *[]GitopsEngineCluster, limit, offSet int) error {
+
+	if err := shouldSimulateFailure("GetGitopsEngineClusterBatch", gitopsEngineCluster, limit, offSet); err != nil {
+		return err
+	}
+
+	return cdb.InnerClient.GetGitopsEngineClusterBatch(ctx, gitopsEngineCluster, limit, offSet)
 }
 
 func (cdb *ChaosDBClient) GetRepositoryCredentialsByID(ctx context.Context, id string) (obj RepositoryCredentials, err error) {
@@ -849,6 +867,15 @@ func (cdb *ChaosDBClient) ListClusterAccessesByManagedEnvironmentID(ctx context.
 
 	return cdb.InnerClient.ListClusterAccessesByManagedEnvironmentID(ctx, managedEnvironmentID, clusterAccesses)
 
+}
+
+func (cdb *ChaosDBClient) GetClusterAccessBatch(ctx context.Context, clusterAccess *[]ClusterAccess, limit, offSet int) error {
+
+	if err := shouldSimulateFailure("GetClusterAccessBatch", clusterAccess, limit, offSet); err != nil {
+		return err
+	}
+
+	return cdb.InnerClient.GetClusterAccessBatch(ctx, clusterAccess, limit, offSet)
 }
 
 func (cdb *ChaosDBClient) ListApplicationsForManagedEnvironment(ctx context.Context, managedEnvironmentID string, applications *[]Application) (int, error) {
