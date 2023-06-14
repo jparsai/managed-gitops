@@ -163,10 +163,10 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err = (&applicationv1alpha1.Environment{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook for V1", "webhook", "Environment")
-			os.Exit(1)
-		}
+		//if err = (&applicationv1alpha1.Environment{}).SetupWebhookWithManager(mgr); err != nil {
+		//	setupLog.Error(err, "unable to create webhook for V1", "webhook", "Environment")
+		//	os.Exit(1)
+		//}
 
 		if err = (&applicationv1beta1.Environment{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook for V2", "webhook", "Environment")
