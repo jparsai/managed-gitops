@@ -2,6 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- https://github.com/jparsai/application-api/config/crd?ref=49ed172c9e680b44678d8b86550627c8c73a74c9
+- https://github.com/jparsai/application-api/config/crd?ref=8bb4e59a6bb05eabf933d1f36eb7fdd48956ae73
 - https://github.com/codeready-toolchain/host-operator/config/crd?ref=826d3d5928fefa0105852bda895d326abefe992d
 - ../../base
