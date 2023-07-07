@@ -33,8 +33,9 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 		var request reconcile.Request
 		var binding *appstudiosharedv1.SnapshotEnvironmentBinding
 		var bindingReconciler SnapshotEnvironmentBindingReconciler
-
 		var environment appstudiosharedv1.Environment
+
+		replica := 3
 
 		BeforeEach(func() {
 			ctx = context.Background()
@@ -95,7 +96,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 								Env: []appstudiosharedv1.EnvVarPair{
 									{Name: "My_STG_ENV", Value: "1000"},
 								},
-								Replicas: 3,
+								Replicas: &replica,
 							},
 						},
 					},
@@ -229,7 +230,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 						Env: []appstudiosharedv1.EnvVarPair{
 							{Name: "My_STG_ENV", Value: "1000"},
 						},
-						Replicas: 3,
+						Replicas: &replica,
 					},
 				},
 				{
@@ -238,7 +239,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 						Env: []appstudiosharedv1.EnvVarPair{
 							{Name: "My_STG_ENV", Value: "1000"},
 						},
-						Replicas: 3,
+						Replicas: &replica,
 					},
 				},
 			}
@@ -1478,8 +1479,9 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 		var request reconcile.Request
 		var binding *appstudiosharedv1.SnapshotEnvironmentBinding
 		var bindingReconciler SnapshotEnvironmentBindingReconciler
-
 		var environment appstudiosharedv1.Environment
+
+		replica := 3
 
 		BeforeEach(func() {
 			ctx = context.Background()
@@ -1540,7 +1542,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 								Env: []appstudiosharedv1.EnvVarPair{
 									{Name: "My_STG_ENV", Value: "1000"},
 								},
-								Replicas: 3,
+								Replicas: &replica,
 							},
 						},
 						{
@@ -1549,7 +1551,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 								Env: []appstudiosharedv1.EnvVarPair{
 									{Name: "My_STG_ENV", Value: "1000"},
 								},
-								Replicas: 3,
+								Replicas: &replica,
 							},
 						},
 					},
