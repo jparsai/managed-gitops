@@ -26,6 +26,7 @@ import (
 	logutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util/log"
 
 	appstudioshared "github.com/redhat-appstudio/application-api/api/v1alpha1"
+	appstudiosharedv1beta1 "github.com/redhat-appstudio/application-api/api/v1beta1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,7 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // EnvironmentReconciler reconciles a Environment object
@@ -88,7 +88,7 @@ func (r *EnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The goal of this function is to ensure that if an Environment exists, and that Environment
 	// has the 'kubernetesCredentials' field defined, that a corresponding
 	// GitOpsDeploymentManagedEnvironment exists (and is up-to-date).
-	environment := &appstudioshared.Environment{
+	environment := &appstudiosharedv1beta1.Environment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
@@ -178,7 +178,7 @@ func (r *EnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // reconcileEnvironment reconciles the Environment into a ManagedEnvironment, based on Environment CR contents
 // - 'res' and 'err' work as normal for a Reconcile function
 // - 'statusUpdated' is true if an error occurred during reconciliation, which caused the .status.Conditions[EnvironmentConditionErrorOccurred] field to be set. It is false otherwise.
-func reconcileEnvironment(ctx context.Context, environment appstudioshared.Environment, rClient client.Client, log logr.Logger) (ctrl.Result, error, bool) {
+func reconcileEnvironment(ctx context.Context, environment appstudiosharedv1beta1.Environment, rClient client.Client, log logr.Logger) (ctrl.Result, error, bool) {
 
 	// Utility constants: true if .status.Conditions[EnvironmentConditionErrorOccurred] was set, false otherwise.
 	const (
@@ -186,7 +186,7 @@ func reconcileEnvironment(ctx context.Context, environment appstudioshared.Envir
 		errorConditionSet_false = false
 	)
 
-	if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.UnstableConfigurationFields != nil {
+	if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.Target != nil {
 		log.Error(nil, "Environment is invalid since it cannot have both DeploymentTargetClaim and credentials configuration set")
 
 		// Update Status.Conditions field of Environment.
@@ -270,7 +270,7 @@ const (
 
 // Update .status.conditions field of Environment
 func updateStatusConditionOfEnvironment(ctx context.Context, client client.Client, message string,
-	environment *appstudioshared.Environment, conditionType string,
+	environment *appstudiosharedv1beta1.Environment, conditionType string,
 	status metav1.ConditionStatus, reason string, log logr.Logger) error {
 
 	newCondition := metav1.Condition{
@@ -296,7 +296,7 @@ func updateStatusConditionOfEnvironment(ctx context.Context, client client.Clien
 }
 
 func updateConditionErrorAsResolved(ctx context.Context, client client.Client, message string,
-	environment *appstudioshared.Environment, conditionType string,
+	environment *appstudiosharedv1beta1.Environment, conditionType string,
 	status metav1.ConditionStatus, reason string, log logr.Logger) error {
 
 	cond, present := findCondition(environment.Status.Conditions, EnvironmentConditionErrorOccurred)
@@ -333,7 +333,7 @@ func findCondition(conditions []metav1.Condition, conditionType string) (metav1.
 // generateDesiredResource will return two types of error:
 // - semanticErrOccurred_dontContinue = true - a error in user input; this does not require re-reconcilition
 // - err != nil - any other error which does require reconciliation
-func generateDesiredResource(ctx context.Context, env appstudioshared.Environment, k8sClient client.Client, log logr.Logger) (*managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment, bool, error) {
+func generateDesiredResource(ctx context.Context, env appstudiosharedv1beta1.Environment, k8sClient client.Client, log logr.Logger) (*managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment, bool, error) {
 
 	// Utility constants: return true if .status.conditions[EnvironmentConditionErrorOccurred] was set, false otherwise.
 	const (
@@ -444,12 +444,12 @@ func generateDesiredResource(ctx context.Context, env appstudioshared.Environmen
 			Namespaces:                 namespacesField,
 		}
 
-	} else if env.Spec.UnstableConfigurationFields != nil {
+	} else if env.Spec.Target != nil {
 		log.Info("Using the cluster credentials specified in the Environment")
 		managedEnvDetails = managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
-			APIURL:                     env.Spec.UnstableConfigurationFields.KubernetesClusterCredentials.APIURL,
-			ClusterCredentialsSecret:   env.Spec.UnstableConfigurationFields.ClusterCredentialsSecret,
-			AllowInsecureSkipTLSVerify: env.Spec.UnstableConfigurationFields.KubernetesClusterCredentials.AllowInsecureSkipTLSVerify,
+			APIURL:                     env.Spec.Target.KubernetesClusterCredentials.APIURL,
+			ClusterCredentialsSecret:   env.Spec.Target.ClusterCredentialsSecret,
+			AllowInsecureSkipTLSVerify: env.Spec.Target.KubernetesClusterCredentials.AllowInsecureSkipTLSVerify,
 		}
 	} else {
 		// Don't process the Environment configuration fields if they are empty:
@@ -458,12 +458,12 @@ func generateDesiredResource(ctx context.Context, env appstudioshared.Environmen
 		return nil, errorConditionSet_false, nil
 	}
 
-	if env.Spec.UnstableConfigurationFields != nil {
-		managedEnvDetails.ClusterResources = env.Spec.UnstableConfigurationFields.ClusterResources
+	if env.Spec.Target != nil {
+		managedEnvDetails.ClusterResources = env.Spec.Target.ClusterResources
 
 		// Make a copy of the Environment's namespaces field
-		size := len(env.Spec.UnstableConfigurationFields.Namespaces)
-		managedEnvDetails.Namespaces = append(make([]string, 0, size), env.Spec.UnstableConfigurationFields.Namespaces...)
+		size := len(env.Spec.Target.Namespaces)
+		managedEnvDetails.Namespaces = append(make([]string, 0, size), env.Spec.Target.Namespaces...)
 	}
 
 	// 1) Retrieve the secret that the Environment is pointing to
@@ -597,24 +597,24 @@ func generateEmptyManagedEnvironment(environmentName string, environmentNamespac
 // SetupWithManager sets up the controller with the Manager.
 func (r *EnvironmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appstudioshared.Environment{}).
+		For(&appstudiosharedv1beta1.Environment{}).
 		Watches(
-			&source.Kind{Type: &corev1.Secret{}},
+			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSecret),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}), // secret doesn't have a generation, so we use RV
 		).
 		Watches(
-			&source.Kind{Type: &appstudioshared.DeploymentTargetClaim{}},
+			&appstudioshared.DeploymentTargetClaim{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForDeploymentTargetClaim),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
 		).
 		Watches(
-			&source.Kind{Type: &appstudioshared.DeploymentTarget{}},
+			&appstudioshared.DeploymentTarget{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForDeploymentTarget),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Watches(
-			&source.Kind{Type: &managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{}},
+			&managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironment{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForGitOpsDeploymentManagedEnvironment),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
@@ -623,8 +623,7 @@ func (r *EnvironmentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // findObjectsForGitOpsDeploymentManagedEnvironment maps an incoming GitOpsDeploymentManagedEnvironment event to the
 // corresponding Environment request.
-func (r *EnvironmentReconciler) findObjectsForGitOpsDeploymentManagedEnvironment(managedEnv client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *EnvironmentReconciler) findObjectsForGitOpsDeploymentManagedEnvironment(ctx context.Context, managedEnv client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -652,8 +651,7 @@ func (r *EnvironmentReconciler) findObjectsForGitOpsDeploymentManagedEnvironment
 }
 
 // findObjectsForDeploymentTargetClaim maps an incoming DTC event to the corresponding Environment request.
-func (r *EnvironmentReconciler) findObjectsForDeploymentTargetClaim(dtc client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *EnvironmentReconciler) findObjectsForDeploymentTargetClaim(ctx context.Context, dtc client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -663,7 +661,7 @@ func (r *EnvironmentReconciler) findObjectsForDeploymentTargetClaim(dtc client.O
 		return []reconcile.Request{}
 	}
 
-	envList := &appstudioshared.EnvironmentList{}
+	envList := &appstudiosharedv1beta1.EnvironmentList{}
 	if err := r.Client.List(context.Background(), envList, &client.ListOptions{Namespace: dtc.GetNamespace()}); err != nil {
 		handlerLog.Error(err, "failed to list Environments in the Environment mapping function")
 		return []reconcile.Request{}
@@ -683,8 +681,7 @@ func (r *EnvironmentReconciler) findObjectsForDeploymentTargetClaim(dtc client.O
 
 // findObjectsForDeploymentTarget maps an incoming DT event to the corresponding Environment request.
 // We should reconcile Environments if the DT credentials get updated.
-func (r *EnvironmentReconciler) findObjectsForDeploymentTarget(dt client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *EnvironmentReconciler) findObjectsForDeploymentTarget(ctx context.Context, dt client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -712,7 +709,7 @@ func (r *EnvironmentReconciler) findObjectsForDeploymentTarget(dt client.Object)
 	}
 
 	// 2. Find all Environments that are associated with this DeploymentTargetClaim.
-	envList := &appstudioshared.EnvironmentList{}
+	envList := &appstudiosharedv1beta1.EnvironmentList{}
 	err = r.Client.List(context.Background(), envList, &client.ListOptions{Namespace: dt.GetNamespace()})
 	if err != nil {
 		handlerLog.Error(err, "failed to list Environments in the Environment mapping function")
@@ -738,8 +735,7 @@ func (r *EnvironmentReconciler) findObjectsForDeploymentTarget(dt client.Object)
 // There are two types of secrets that we want to reconcile:
 // 1. Secret created by the SpaceRequest controller
 // 2. Secret created for the managed Environment
-func (r *EnvironmentReconciler) findObjectsForSecret(secret client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *EnvironmentReconciler) findObjectsForSecret(ctx context.Context, secret client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -771,7 +767,7 @@ func (r *EnvironmentReconciler) findObjectsForSecret(secret client.Object) []rec
 	}
 
 	// If the secret is created by the SpaceRequest controller, find the corresponding Environment.
-	envList := &appstudioshared.EnvironmentList{}
+	envList := &appstudiosharedv1beta1.EnvironmentList{}
 	err := r.Client.List(context.Background(), envList, &client.ListOptions{Namespace: secret.GetNamespace()})
 	if err != nil {
 		handlerLog.Error(err, "failed to list Environments in the Environment mapping function")
