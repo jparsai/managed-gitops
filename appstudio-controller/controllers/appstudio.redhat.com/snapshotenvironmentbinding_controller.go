@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	appstudioshared "github.com/redhat-appstudio/application-api/api/v1alpha1"
+	appstudiosharedv1beta1 "github.com/redhat-appstudio/application-api/api/v1alpha1"
 	apibackend "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	logutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util/log"
@@ -109,7 +110,7 @@ func (r *SnapshotEnvironmentBindingReconciler) Reconcile(ctx context.Context, re
 	// if our reconciliation changed the resource at all.
 	originalBinding := *binding.DeepCopy()
 
-	environment := appstudioshared.Environment{
+	environment := appstudiosharedv1beta1.Environment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      binding.Spec.Environment,
 			Namespace: req.Namespace,
@@ -477,7 +478,7 @@ func GenerateBindingGitOpsDeploymentName(binding appstudioshared.SnapshotEnviron
 
 func generateExpectedGitOpsDeployment(ctx context.Context, component appstudioshared.BindingComponentStatus,
 	binding appstudioshared.SnapshotEnvironmentBinding,
-	environment appstudioshared.Environment,
+	environment appstudiosharedv1beta1.Environment,
 	k8sClient client.Client, logger logr.Logger) (apibackend.GitOpsDeployment, gitopserrors.UserError) {
 
 	res := apibackend.GitOpsDeployment{
@@ -611,7 +612,7 @@ func (r *SnapshotEnvironmentBindingReconciler) SetupWithManager(mgr ctrl.Manager
 		For(&appstudioshared.SnapshotEnvironmentBinding{}).
 		Owns(&apibackend.GitOpsDeployment{}).
 		Watches(
-			&source.Kind{Type: &appstudioshared.Environment{}},
+			&source.Kind{Type: &appstudiosharedv1beta1.Environment{}},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForEnvironment),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
@@ -642,7 +643,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetCla
 	}
 
 	// 1. Find all Environments that are associated with this DeploymentTargetClaim.
-	envList := &appstudioshared.EnvironmentList{}
+	envList := &appstudiosharedv1beta1.EnvironmentList{}
 	if err := r.Client.List(context.Background(), envList, &client.ListOptions{Namespace: dtcObj.GetNamespace()}); err != nil {
 		handlerLog.Error(err, "failed to list Environments in the SEB DeploymentTargetClaim mapping function")
 		return []reconcile.Request{}
@@ -706,7 +707,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt
 	}
 
 	// 2. Find all Environments that are associated with this DeploymentTargetClaim.
-	envList := &appstudioshared.EnvironmentList{}
+	envList := &appstudiosharedv1beta1.EnvironmentList{}
 	if err := r.Client.List(context.Background(), envList, &client.ListOptions{Namespace: dt.GetNamespace()}); err != nil {
 		handlerLog.Error(err, "failed to list Environments in the SEB DeploymentTarget mapping function")
 		return []reconcile.Request{}
@@ -755,7 +756,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForEnvironment(envPara
 		WithName(logutil.LogLogger_managed_gitops)
 
 	// 1) Cast the Environment obj
-	envObj, ok := envParam.(*appstudioshared.Environment)
+	envObj, ok := envParam.(*appstudiosharedv1beta1.Environment)
 	if !ok {
 		handlerLog.Error(nil, "incompatible object in the Environment mapping function, expected a Secret")
 		return []reconcile.Request{}
