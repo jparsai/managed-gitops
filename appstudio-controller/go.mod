@@ -102,7 +102,7 @@ require (
 )
 
 replace (
-	github.com/redhat-appstudio/application-api => github.com/jparsai/application-api v0.0.0-20230709133626-f96f4eedcab1
+	github.com/redhat-appstudio/application-api => github.com/jparsai/application-api v0.0.0-20230710073644-b6ec57caf729
 	github.com/redhat-appstudio/managed-gitops/backend => ../backend
 	github.com/redhat-appstudio/managed-gitops/backend-shared => ../backend-shared
 	github.com/redhat-appstudio/managed-gitops/utilities/db-migration => ../utilities/db-migration
