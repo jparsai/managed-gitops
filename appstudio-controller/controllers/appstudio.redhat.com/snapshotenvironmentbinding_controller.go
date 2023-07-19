@@ -612,18 +612,18 @@ func (r *SnapshotEnvironmentBindingReconciler) SetupWithManager(mgr ctrl.Manager
 		For(&appstudioshared.SnapshotEnvironmentBinding{}).
 		Owns(&apibackend.GitOpsDeployment{}).
 		Watches(
-			&source.Kind{Type: &appstudiosharedv1beta1.Environment{}},
+			&appstudiosharedv1beta1.Environment{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForEnvironment),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Watches(
-			&source.Kind{Type: &appstudioshared.DeploymentTarget{}},
+			&appstudioshared.DeploymentTarget{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForDeploymentTarget),
 			// When/if we start using DT's .status field, switch this ResourceVersionChangedPredicate:
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Watches(
-			&source.Kind{Type: &appstudioshared.DeploymentTargetClaim{}},
+			&appstudioshared.DeploymentTargetClaim{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForDeploymentTargetClaim),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
 		).Complete(r)
@@ -749,7 +749,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt
 	return snapshotRequests
 }
 
-// findObjectsForManagedEnvironment will reconcile on any ManagedEnvironments that are (indirectly) referenced by SEBs
+// findObjectsForEnvironment will reconcile on any Environments that are (indirectly) referenced by SEBs
 func (r *SnapshotEnvironmentBindingReconciler) findObjectsForEnvironment(envParam client.Object) []reconcile.Request {
 	ctx := context.Background()
 	handlerLog := log.FromContext(ctx).

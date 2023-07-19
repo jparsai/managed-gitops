@@ -1926,7 +1926,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 
 		ctx := context.Background()
 
-		var k8sClient sharedutil.ProxyClient
+		var k8sClient client.Client
 		var apiNamespace corev1.Namespace
 		log := log.FromContext(ctx)
 
@@ -1946,20 +1946,22 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 			apiNamespace = *namespace
 
 			// Create fake client
-			fakeK8sClient := fake.NewClientBuilder().
+			k8sClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(namespace, argocdNamespace, kubesystemNamespace).
 				Build()
 
-			k8sClient = sharedutil.ProxyClient{
-				InnerClient: fakeK8sClient,
-				Informer:    &eventReceiver,
-			}
-
+			//k8sClient = sharedutil.ProxyClient{
+			//	InnerClient: fakeK8sClient,
+			//	Informer:    &eventReceiver,
+			//}
 		})
 
 		DescribeTable("verify updateBindingConditionOfSEB works as expected",
 			func(preCondition []metav1.Condition, newCondition metav1.Condition, expectedResult []metav1.Condition, expectUpdateStatusCalled bool) {
+
+				fmt.Println("####################")
+				fmt.Println("####################")
 
 				By("creating an initial SEB with the initial state of status.bindingConditions")
 				env := appstudiosharedv1.SnapshotEnvironmentBinding{
@@ -1979,7 +1981,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 				eventReceiver.Events = []sharedutil.ProxyClientEvent{}
 
 				By("calling the binding condition update function")
-				err = updateBindingConditionOfSEB(ctx, &k8sClient, newCondition.Message, &env, EnvironmentConditionErrorOccurred,
+				err = updateBindingConditionOfSEB(ctx, k8sClient, newCondition.Message, &env, EnvironmentConditionErrorOccurred,
 					newCondition.Status, newCondition.Reason, log)
 				Expect(err).To(BeNil())
 
