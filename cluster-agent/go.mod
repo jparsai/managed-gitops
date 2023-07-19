@@ -1,6 +1,6 @@
 module github.com/redhat-appstudio/managed-gitops/cluster-agent
 
-go 1.18
+go 1.19
 
 require (
 	github.com/argoproj-labs/argocd-operator v0.5.0

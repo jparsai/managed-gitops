@@ -48,7 +48,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -631,8 +630,7 @@ func (r *SnapshotEnvironmentBindingReconciler) SetupWithManager(mgr ctrl.Manager
 
 // findObjectsForDeploymentTarget maps an incoming DT event to the corresponding Environment request.
 // We should reconcile Environments if the DT credentials get updated.
-func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetClaim(dtc client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetClaim(ctx context.Context, dtc client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -680,8 +678,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetCla
 
 // findObjectsForDeploymentTarget maps an incoming DT event to the corresponding Environment request.
 // We should reconcile Environments if the DT credentials get updated.
-func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(ctx context.Context, dt client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
@@ -750,8 +747,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt
 }
 
 // findObjectsForEnvironment will reconcile on any Environments that are (indirectly) referenced by SEBs
-func (r *SnapshotEnvironmentBindingReconciler) findObjectsForEnvironment(envParam client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *SnapshotEnvironmentBindingReconciler) findObjectsForEnvironment(ctx context.Context, envParam client.Object) []reconcile.Request {
 	handlerLog := log.FromContext(ctx).
 		WithName(logutil.LogLogger_managed_gitops)
 
