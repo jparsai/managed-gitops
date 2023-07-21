@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -237,6 +238,16 @@ func (pc *ProxyClient) Scheme() *runtime.Scheme {
 func (pc *ProxyClient) RESTMapper() meta.RESTMapper {
 	res := pc.InnerClient.RESTMapper()
 	return res
+}
+
+// RESTMapper returns the rest this client is using.
+func (pc *ProxyClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return pc.InnerClient.GroupVersionKindFor(obj)
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (pc *ProxyClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return pc.InnerClient.IsObjectNamespaced(obj)
 }
 
 type ProxyClientEventReceiver interface {
