@@ -85,12 +85,6 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, nil
 		}
 
-		// Update Status.Conditions field of DeploymentTarget.
-		if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, err.Error(), &dt,
-			DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionTrue, DeploymentTargetReasonErrorOccurred, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
-		}
-
 		return ctrl.Result{}, err
 	}
 
