@@ -1157,8 +1157,8 @@ func buildManagedEnvironment(apiServerURL string, kubeConfigContents string, cre
 			Namespace: fixture.GitOpsServiceE2ENamespace,
 		},
 		Spec: managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
-			APIURL: apiServerURL,
-			//ClusterCredentialsSecret:   secret.Name,
+			APIURL:                     apiServerURL,
+			ClusterCredentialsSecret:   secret.Name,
 			AllowInsecureSkipTLSVerify: true,
 			CreateNewServiceAccount:    createNewServiceAccount,
 		},
