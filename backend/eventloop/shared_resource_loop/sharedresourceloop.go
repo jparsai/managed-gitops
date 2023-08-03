@@ -183,7 +183,8 @@ func (srEventLoop *SharedResourceEventLoop) ReconcileRepositoryCredential(ctx co
 
 	// Create a logger with context
 	l := log.FromContext(ctx).
-		WithName(logutil.LogLogger_managed_gitops)
+		WithName(logutil.LogLogger_managed_gitops).
+		WithValues("namespace", workspaceNamespace.Name)
 
 	msg := sharedResourceLoopMessage{
 		log:                l,
@@ -338,7 +339,9 @@ func internalSharedResourceEventLoop(inputChan chan sharedResourceLoopMessage) {
 
 func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMessage, dbQueries db.DatabaseQueries, l logr.Logger) {
 
-	l.V(logutil.LogLevel_Debug).Info("sharedResourceEventLoop received message: "+string(msg.messageType),
+	log := l.WithValues("workspace", msg.workspaceNamespace.Name)
+
+	log.V(logutil.LogLevel_Debug).Info("sharedResourceEventLoop received message: "+string(msg.messageType),
 		"workspace", msg.workspaceNamespace.UID)
 
 	if msg.messageType == sharedResourceLoopMessage_getOrCreateSharedManagedEnv {
@@ -346,7 +349,7 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 		payload, ok := (msg.payload).(sharedResourceLoopMessage_getOrCreateSharedResourceManagedEnvRequest)
 		if !ok {
 			err := fmt.Errorf("SEVERE: unexpected payload")
-			l.Error(err, "")
+			log.Error(err, "")
 			// Reply on a separate goroutine so cancelled callers don't block the event loop
 			go func() {
 				msg.responseChannel <- sharedResourceLoopMessage_getOrCreateSharedResourcesResponse{
@@ -359,7 +362,7 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 
 		res, err := internalProcessMessage_ReconcileSharedManagedEnv(ctx, msg.workspaceClient, payload.managedEnvironmentCRName,
 			payload.managedEnvironmentCRNamespace, payload.isWorkspaceTarget, msg.workspaceNamespace,
-			payload.k8sClientFactory, dbQueries, l)
+			payload.k8sClientFactory, dbQueries, log)
 
 		response := sharedResourceLoopMessage_getOrCreateSharedResourcesResponse{
 			err:               err,
@@ -373,7 +376,7 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 
 	} else if msg.messageType == sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUID {
 
-		clusterUser, isNewUser, err := internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx, msg.workspaceNamespace, dbQueries, l)
+		clusterUser, isNewUser, err := internalProcessMessage_GetOrCreateClusterUserByNamespaceUID(ctx, msg.workspaceNamespace, dbQueries, log)
 
 		response := sharedResourceLoopMessage_getOrCreateClusterUserByNamespaceUIDResponse{
 			err:         err,
@@ -396,7 +399,7 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 			gitopsEngineInstance, err = internalProcessMessage_GetGitopsEngineInstanceById(ctx, payload.gitopsEngineInstanceID, dbQueries)
 		} else {
 			err = fmt.Errorf("SEVERE - unexpected cast in internalSharedResourceEventLoop")
-			l.Error(err, err.Error())
+			log.Error(err, err.Error())
 		}
 
 		response := sharedResourceLoopMessage_getGitopsEngineInstanceByIdResponse{
@@ -417,11 +420,11 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 		if ok {
 
 			repositoryCredential, err = internalProcessMessage_ReconcileRepositoryCredential(ctx,
-				payload.repositoryCredentialCRName, msg.workspaceNamespace, msg.workspaceClient, payload.k8sClientFactory, dbQueries, true, l)
+				payload.repositoryCredentialCRName, msg.workspaceNamespace, msg.workspaceClient, payload.k8sClientFactory, dbQueries, true, log)
 
 		} else {
 			err = fmt.Errorf("SEVERE - unexpected cast in internalSharedResourceEventLoop")
-			l.Error(err, err.Error())
+			log.Error(err, err.Error())
 		}
 
 		response := sharedResourceLoopMessage_reconcileRepositoryCredentialResponse{
@@ -435,7 +438,7 @@ func processSharedResourceMessage(ctx context.Context, msg sharedResourceLoopMes
 		}()
 
 	} else {
-		l.Error(nil, "SEVERE: unrecognized sharedResourceLoopMessageType: "+string(msg.messageType))
+		log.Error(nil, "SEVERE: unrecognized sharedResourceLoopMessageType: "+string(msg.messageType))
 	}
 
 }
