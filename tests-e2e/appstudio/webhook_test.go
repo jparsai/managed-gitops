@@ -201,7 +201,7 @@ var _ = Describe("Webhook E2E tests", func() {
 			environment.Name = "Staging"
 			err = k8s.Create(&environment, k8sClient)
 			Expect(err).NotTo(Succeed())
-			Expect(strings.Contains(err.Error(), fmt.Sprintf("Invalid value: %s", environment.Name))).To(BeTrue())
+			Expect(strings.Contains(err.Error(), fmt.Sprintf("a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters"))).To(BeTrue())
 
 			By("Validate that Environment name having small letters is allowed.")
 
