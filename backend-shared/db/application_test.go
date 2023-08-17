@@ -99,7 +99,8 @@ var _ = Describe("Application Test", func() {
 		_, managedEnvironment, _, gitopsEngineInstance, _, err := db.CreateSampleData(dbq)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Create multiple application entries.
+		By("Create multiple Application entries.")
+
 		applicationput := db.Application{
 			Application_id:          "test-my-application-1",
 			Name:                    "my-application",
@@ -126,6 +127,8 @@ var _ = Describe("Application Test", func() {
 		applicationput.Application_id = "test-my-application-5"
 		err = dbq.CreateApplication(ctx, &applicationput)
 		Expect(err).ToNot(HaveOccurred())
+
+		By("Get data in batch.")
 
 		var listOfApplicationsFromDB []db.Application
 		err = dbq.GetApplicationBatch(ctx, &listOfApplicationsFromDB, 2, 0)
