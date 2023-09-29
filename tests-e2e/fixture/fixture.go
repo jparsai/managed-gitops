@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appstudiosharedv1 "github.com/redhat-appstudio/application-api/api/v1alpha1"
+	appstudiosharedv1beta1 "github.com/redhat-appstudio/application-api/api/v1beta1"
 	managedgitopsv1alpha1 "github.com/redhat-appstudio/managed-gitops/backend-shared/apis/managed-gitops/v1alpha1"
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/k8s"
 
@@ -303,7 +304,7 @@ func cleanUpOldHASApplicationAPIs(namespace string, k8sClient client.Client) err
 }
 
 func cleanUpOldEnvironmentAPIs(namespace string, k8sClient client.Client) error {
-	environmentList := appstudiosharedv1.EnvironmentList{}
+	environmentList := appstudiosharedv1beta1.EnvironmentList{}
 	if err := k8sClient.List(context.Background(), &environmentList, &client.ListOptions{Namespace: namespace}); err != nil {
 		return fmt.Errorf("unable to cleanup old HAS Applications: %w", err)
 	}
@@ -818,6 +819,11 @@ func GetKubeClient(config *rest.Config) (client.Client, error) {
 	}
 
 	err = appstudiosharedv1.AddToScheme(scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	err = appstudiosharedv1beta1.AddToScheme(scheme)
 	if err != nil {
 		return nil, err
 	}
