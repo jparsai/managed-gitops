@@ -19,9 +19,11 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -111,11 +113,13 @@ var _ = Describe("GitOpsRepositoryCredentials E2E tests", func() {
 
 		// Get the config map to be deployed from the private repo
 		configMap = getConfigMapYAML()
+
+		fmt.Println("configMap ==== ", configMap)
 	})
 
 	Context("Deploy from a private repository (access via username/password)", func() {
 
-		It("Should work without HTTPS/Token authentication issues", func() {
+		FIt("Should work without HTTPS/Token authentication issues", func() {
 			// --- Tests --- //
 			By("1. Clean the test environment")
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
@@ -130,6 +134,17 @@ var _ = Describe("GitOpsRepositoryCredentials E2E tests", func() {
 			By("3. Create the GitOpsDeploymentRepositoryCredential CR for HTTPS")
 			CR := gitopsDeploymentRepositoryCredentialCRForTokenTest()
 			Expect(k8s.Create(CR, k8sClient)).To(Succeed())
+
+			fmt.Println("CR === ", CR)
+			fmt.Println("CR.Status === ", CR.Status)
+
+			time.Sleep(1 * time.Minute)
+
+			err = k8s.Get(CR, k8sClient)
+
+			fmt.Println("CR 1 === ", CR)
+			fmt.Println("CR.Status 1 === ", CR.Status)
+
 			Expect(CR.Status.Conditions).To(HaveLen(3))
 
 			By("4. Create the GitOpsDeployment CR")

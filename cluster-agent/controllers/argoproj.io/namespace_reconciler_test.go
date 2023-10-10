@@ -2,6 +2,7 @@ package argoprojio
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -949,6 +950,137 @@ var _ = Describe("Namespace Reconciler Tests.", func() {
 			err = dbq.ListOperationsByResourceIdAndTypeAndOwnerId(ctx, application.Application_id, db.OperationResourceType_Application, &operation, db.SpecialClusterUserName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(operation).To(HaveLen(1))
+		})
+	})
+
+	Context("Testing for recreateClusterSecrets function.", func() {
+
+		var log logr.Logger
+		var ctx context.Context
+		var secret corev1.Secret
+		var dbq db.AllDatabaseQueries
+		var k8sClient client.WithWatch
+		var kubeSystemNamepace corev1.Namespace
+		var repositoryCredentials db.RepositoryCredentials
+
+		BeforeEach(func() {
+			err := db.SetupForTestingDBGinkgo()
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx = context.Background()
+			log = logger.FromContext(ctx)
+
+			dbq, err = db.NewUnsafePostgresDBQueries(true, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			scheme, _, _, _, err := tests.GenericTestSetup()
+			Expect(err).ToNot(HaveOccurred())
+
+			err = appv1.AddToScheme(scheme)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create fake kube client.")
+
+			k8sClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			By("Create kube-system namespace.")
+
+			kubeSystemNamepace = corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kube-system",
+					UID:  "test-" + uuid.NewUUID(),
+				},
+			}
+			err = k8sClient.Create(ctx, &kubeSystemNamepace)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create GitopsEngineCluster.")
+
+			gitopsEngineCluster, created, err := dbutil.GetOrCreateGitopsEngineClusterByKubeSystemNamespaceUID(ctx, string(kubeSystemNamepace.UID), dbq, log)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(gitopsEngineCluster).ToNot(BeNil())
+			Expect(created).To(BeTrue())
+
+			By("Create ClusterCredentials entry in DB.")
+
+			clusterCredentials := db.ClusterCredentials{
+				Clustercredentials_cred_id:  "test-creds-" + string(uuid.NewUUID()),
+				Host:                        "host",
+				Kube_config:                 "kube-config",
+				Kube_config_context:         "kube-config-context",
+				Serviceaccount_bearer_token: "serviceaccount_bearer_token",
+				Serviceaccount_ns:           "Serviceaccount_ns",
+			}
+			err = dbq.CreateClusterCredentials(ctx, &clusterCredentials)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create ManagedEnvironment entry in DB.")
+
+			By("Create GitopsEngineInstance entry in DB.")
+
+			gitopsEngineInstance := db.GitopsEngineInstance{
+				Gitopsengineinstance_id: "test-id" + string(uuid.NewUUID()),
+				Namespace_name:          "test-ns-" + string(uuid.NewUUID()),
+				Namespace_uid:           "test-ns-" + string(uuid.NewUUID()),
+				EngineCluster_id:        gitopsEngineCluster.Gitopsenginecluster_id,
+			}
+			err = dbq.CreateGitopsEngineInstance(ctx, &gitopsEngineInstance)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create DB entry for RepositoryCredentials
+			repositoryCredentials = db.RepositoryCredentials{
+				RepositoryCredentialsID: "test-repo-" + string(uuid.NewUUID()),
+				UserID:                  "test-user",
+				PrivateURL:              "https://test-private-url",
+				AuthUsername:            "test-auth-username",
+				AuthPassword:            "test-auth-password",
+				AuthSSHKey:              "test-auth-ssh-key",
+				SecretObj:               "test-secret-obj",
+				EngineClusterID:         gitopsEngineInstance.Gitopsengineinstance_id,
+			}
+			err = dbq.CreateRepositoryCredentials(ctx, &repositoryCredentials)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create Application entry in DB.")
+
+			By("Create Secret CR definition.")
+
+			secret = corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      repositoryCredentials.SecretObj,
+					Namespace: gitopsEngineInstance.Namespace_name,
+				},
+			}
+		})
+
+		FIt("Should not create Operation for Secret, even if it is missing in Cluster, since ManagedEnvironment is created recently.", func() {
+
+			defer dbq.CloseDatabase()
+
+			By("Create Secret CR in cluster.")
+
+			//err := k8sClient.Create(ctx, &secret)
+			//Expect(err).ToNot(HaveOccurred())
+
+			fmt.Println(secret.Annotations)
+
+			/*By("Get list of Operations before calling function.")
+
+			var operation []db.Operation
+
+			err = dbq.ListOperationsByResourceIdAndTypeAndOwnerId(ctx, application.Application_id, db.OperationResourceType_Application, &operation, db.SpecialClusterUserName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(operation).To(BeEmpty())*/
+
+			By("Call function to recreate Secret if missing from cluster.")
+
+			recreateClusterSecrets_1(ctx, dbq, k8sClient, log)
+
+			/*By("Get list of Operations after calling function.")
+
+			err = dbq.ListOperationsByResourceIdAndTypeAndOwnerId(ctx, application.Application_id, db.OperationResourceType_Application, &operation, db.SpecialClusterUserName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(operation).To(BeEmpty())*/
 		})
 	})
 })

@@ -603,6 +603,98 @@ func recreateClusterSecrets(ctx context.Context, dbQueries db.DatabaseQueries, k
 	}
 }
 
+// recreateClusterSecrets goes through list of ManagedEnvironments created in cluster and recreates Secrets that are missing from cluster.
+func recreateClusterSecrets_1(ctx context.Context, dbQueries db.DatabaseQueries, k8sClient client.Client, logger logr.Logger) {
+	fmt.Println("11111")
+	log := logger.WithValues(sharedutil.Log_JobKey, sharedutil.Log_JobKeyValue).
+		WithValues(sharedutil.Log_JobTypeKey, "CR_Secret_recreate")
+
+	// First get list of RepositoryCredentials entries from DB.
+	listOfRepositoryCredentialsFromDB := getListOfRepositoryCredentialsFromTable(ctx, dbQueries, false, log)
+	fmt.Println("222")
+	// Now get list of GitopsEngineInstances from DB for the cluster service is running on.
+	listOfGitopsEngineInstanceFromCluster, err := getListOfGitopsEngineInstancesForCurrentCluster(ctx, dbQueries, k8sClient, log)
+	if err != nil {
+		log.Error(err, "Error occurred in recreateClusterSecrets while fetching GitopsEngineInstances for cluster.")
+		return
+	}
+	fmt.Println("333")
+	// map: whether we have processed this namespace already.
+	// key is namespace UID, value is not used.
+	// - we should only ever process a namespace once per iteration.
+	namespacesProcessed := map[string]interface{}{}
+
+	for instanceIndex := range listOfGitopsEngineInstanceFromCluster {
+		fmt.Println("4444")
+		// For each GitOpsEngineinstance, read the namespace and check all the Argo CD secrets in that namespace
+		instance := listOfGitopsEngineInstanceFromCluster[instanceIndex] // To avoid "Implicit memory aliasing in for loop." error.
+
+		// Sanity check: have we processed this Namespace already
+		if _, exists := namespacesProcessed[instance.Namespace_uid]; exists {
+			// Log it an skip. There really should never be any GitOpsEngineInstances with matching namespace UID
+			log.V(logutil.LogLevel_Warn).Error(nil, "there appears to exist multiple GitOpsEngineInstances targeting the same namespace", "namespaceUID", instance.Namespace_uid)
+			continue
+		}
+		namespacesProcessed[instance.Namespace_uid] = nil
+		fmt.Println("5555")
+		// Iterate through list of RepositoryCredentials entries from DB and find entry using current GitOpsEngineInstance.
+		for repositoryCredentialsIndex := range listOfRepositoryCredentialsFromDB {
+			fmt.Println("6666")
+			repositoryCredentials := listOfRepositoryCredentialsFromDB[repositoryCredentialsIndex] // To avoid "Implicit memory aliasing in for loop." error.
+
+			if repositoryCredentials.EngineClusterID == instance.Gitopsengineinstance_id {
+				fmt.Println("7777")
+				// Skip if RepositoryCredentials is created recently
+				//if time.Since(repositoryCredentials.Created_on) < 30*time.Minute {
+				//	continue
+				//}
+
+				// Check if Secret used for this RepositoryCredentials is present in GitOpsEngineInstance namespace.
+				argoSecret := corev1.Secret{}
+
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: GenerateArgoCDRepoCredSecretName(repositoryCredentials), Namespace: instance.Namespace_name}, &argoSecret); err != nil {
+					fmt.Println("888")
+					// If Secret is not present, then create Operation to recreate the Secret.
+					if apierr.IsNotFound(err) {
+						fmt.Println("999")
+						log.Info("Secret: " + repositoryCredentials.SecretObj + " not found in Namespace:" + instance.Namespace_name + ", recreating it.")
+
+						// Get Special user from DB because we need ClusterUser for creating Operation and we don't have one.
+						// Hence created a dummy Cluster User for internal purpose.
+						var specialClusterUser db.ClusterUser
+						if err := dbQueries.GetOrCreateSpecialClusterUser(ctx, &specialClusterUser); err != nil {
+							log.Error(err, "Error occurred in recreateClusterSecrets while fetching clusterUser.")
+							return
+						}
+
+						// We need to recreate Secret, to do that create Operation to inform Argo CD about it.
+						dbOperationInput := db.Operation{
+							Instance_id:   instance.Gitopsengineinstance_id,
+							Resource_id:   repositoryCredentials.RepositoryCredentialsID,
+							Resource_type: db.OperationResourceType_RepositoryCredentials,
+						}
+
+						if _, _, err := operations.CreateOperation(ctx, false, dbOperationInput, specialClusterUser.Clusteruser_id, instance.Namespace_name, dbQueries, k8sClient, log); err != nil {
+							log.Error(err, "Error occurred in recreateClusterSecrets while creating Operation.")
+							continue
+						}
+						fmt.Println("101010")
+						log.Info("Operation " + dbOperationInput.Operation_id + " is created to create Secret: " + repositoryCredentials.SecretObj)
+
+					} else {
+						log.Error(err, "Error occurred in recreateClusterSecrets while fetching Secret:"+repositoryCredentials.SecretObj+" from Namespace: "+instance.Namespace_name)
+					}
+				}
+			}
+		}
+	}
+}
+
+// GenerateArgoCDRepoCredSecretName generates the name of the Argo CD Repository Credentials secret.
+func GenerateArgoCDRepoCredSecretName(repoCred db.RepositoryCredentials) string {
+	return "repo-cred-" + repoCred.RepositoryCredentialsID
+}
+
 // getListOfClusterAccessFromTable loops through ClusterAccess in database and returns list of user IDs.
 func getListOfClusterAccessFromTable(ctx context.Context, dbQueries db.DatabaseQueries, skipDelay bool, log logr.Logger) []db.ClusterAccess {
 
@@ -713,4 +805,39 @@ func getApplicationRunningInManagedEnvironment(applicationList []db.Application,
 	}
 
 	return false, db.Application{}
+}
+
+// getListOfRepositoryCredentialsFromTable loops through RepositoryCredentials in database and returns list of user IDs.
+func getListOfRepositoryCredentialsFromTable(ctx context.Context, dbQueries db.DatabaseQueries, skipDelay bool, log logr.Logger) []db.RepositoryCredentials {
+
+	offSet := 0
+	var listOfRepositoryCredentialsFromDB []db.RepositoryCredentials
+
+	// Continuously iterate and fetch batches until all entries of table processed.
+	for {
+		if offSet != 0 && !skipDelay {
+			time.Sleep(sleepIntervalsOfBatches)
+		}
+
+		var tempList []db.RepositoryCredentials
+
+		// Fetch ClusterAccess table entries in batch size as configured above.​
+		if err := dbQueries.GetRepositoryCredentialsBatch(ctx, &tempList, appRowBatchSize, offSet); err != nil {
+			log.Error(err, fmt.Sprintf("Error occurred in cleanOrphanedEntriesfromTable_ClusterUser while fetching batch from Offset: %d to %d: ",
+				offSet, offSet+appRowBatchSize))
+			break
+		}
+
+		// Break the loop if no entries are left in table to be processed.
+		if len(tempList) == 0 {
+			break
+		}
+
+		listOfRepositoryCredentialsFromDB = append(listOfRepositoryCredentialsFromDB, tempList...)
+
+		// Skip processed entries in next iteration
+		offSet += appRowBatchSize
+	}
+
+	return listOfRepositoryCredentialsFromDB
 }
