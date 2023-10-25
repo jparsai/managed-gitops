@@ -42,7 +42,6 @@ import (
 	appstudioredhatcomcontrollers "github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/appstudio.redhat.com"
 	"github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/webhooks"
 
-	webhook "github.com/redhat-appstudio/managed-gitops/appstudio-controller/controllers/webhooks"
 	sharedutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util"
 	logutil "github.com/redhat-appstudio/managed-gitops/backend-shared/util/log"
 	//+kubebuilder:scaffold:imports
@@ -210,7 +209,7 @@ func main() {
 
 // setUpWebhooks sets up webhooks.
 func setUpWebhooks(mgr ctrl.Manager) {
-	err := webhook.SetupWebhooks(mgr, webhooks.EnabledWebhooks...)
+	err := webhooks.SetupWebhooks(mgr, webhooks.EnabledWebhooks...)
 	if err != nil {
 		setupLog.Error(err, "unable to setup webhooks")
 		os.Exit(1)

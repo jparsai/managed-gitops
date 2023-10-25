@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Webhook describes the data structure for the release webhook
@@ -46,9 +45,6 @@ func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error 
 		Complete()
 }
 
-// log is for logging in this package.
-var environmentlog = logf.Log.WithName("environment-resource")
-
 // +kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1alpha1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
@@ -56,7 +52,7 @@ func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Obj
 
 	app := obj.(*appstudiov1alpha1.Environment)
 
-	environmentlog := environmentlog.
+	environmentlog := r.log.WithName("environment-webhook-create").
 		WithValues("controllerKind", "Environment").
 		WithValues("name", app.Name).
 		WithValues("namespace", app.Namespace)
@@ -76,7 +72,7 @@ func (r *EnvironmentWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj 
 
 	newApp := newObj.(*appstudiov1alpha1.Environment)
 
-	environmentlog := environmentlog.
+	environmentlog := r.log.WithName("environment-webhook-update").
 		WithValues("controllerKind", "Environment").
 		WithValues("name", newApp.Name).
 		WithValues("namespace", newApp.Namespace)
