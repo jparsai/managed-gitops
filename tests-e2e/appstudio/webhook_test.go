@@ -90,9 +90,16 @@ var _ = Describe("Webhook E2E tests", func() {
 
 		It("Should validate SnapshotEnvironmentBinding CR Webhooks.", func() {
 
+			k8sClient, err = fixture.GetE2ETestUserWorkspaceKubeClient()
+			Expect(err).To(Succeed())
+
 			if !isWebhookInstalled("snapshotenvironmentbindings", k8sClient) {
 				Skip("skipping as snapshotenvironmentbindings webhook is not installed")
 			}
+
+			Expect(fixture.EnsureCleanSlate()).To(Succeed())
+
+			ctx = context.Background()
 
 			By("Create Application.")
 
@@ -233,6 +240,7 @@ var _ = Describe("Webhook E2E tests", func() {
 
 			environment := buildEnvironmentResource(strings.Repeat("abcde", 13), "my-environment", "", "")
 			err = k8s.Create(&environment, k8sClient)
+			fmt.Println("err =========== ", err)
 			Expect(err).NotTo(Succeed())
 			Expect(strings.Contains(err.Error(), fmt.Sprintf("invalid environment name: %s", environment.Name))).To(BeTrue())
 
@@ -627,8 +635,11 @@ var _ = Describe("Webhook E2E tests", func() {
 // isWebHook installed will check the cluster for validatingwebhooks that match the given resource
 // - resource should be specified in plural form, to match the 'resource' field, for example: gitopsdeployments
 func isWebhookInstalled(resourceName string, k8sClient client.Client) bool {
-
+	fmt.Println("isWebhookInstalled ========================")
 	var webhookList admissionv1.ValidatingWebhookConfigurationList
+	fmt.Println("k8sClient == ", k8sClient)
+	fmt.Println("resourceName == ", resourceName)
+
 	err := k8sClient.List(context.Background(), &webhookList)
 	Expect(err).ToNot(HaveOccurred())
 

@@ -7,7 +7,7 @@ require (
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20230417235430-8258a3281250
 	github.com/onsi/ginkgo/v2 v2.6.0
 	github.com/onsi/gomega v1.24.1
-	github.com/redhat-appstudio/application-api v0.0.0-20230906075853-8d1126322971
+	github.com/redhat-appstudio/application-api v0.0.0-20231025105224-2790bb451725
 	github.com/redhat-appstudio/managed-gitops/backend-shared v0.0.0
 	github.com/stretchr/testify v1.8.0
 	k8s.io/apimachinery v0.25.0
@@ -104,8 +104,6 @@ require (
 )
 
 replace (
-	github.com/redhat-appstudio/application-api => github.com/jparsai/application-api v0.0.0-20231018111833-7ae6ab0aa2fe
-
 	github.com/redhat-appstudio/managed-gitops/backend => ../backend
 	github.com/redhat-appstudio/managed-gitops/backend-shared => ../backend-shared
 	github.com/redhat-appstudio/managed-gitops/utilities/db-migration => ../utilities/db-migration

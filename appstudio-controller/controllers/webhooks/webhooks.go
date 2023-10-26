@@ -45,4 +45,7 @@ func SetupWebhooks(mgr manager.Manager, webhooks ...Webhook) error {
 // EnabledWebhooks is a slice containing references to all the webhooks that have to be registered
 var EnabledWebhooks = []Webhook{
 	&EnvironmentWebhook{},
+	&PromotionRunWebhook{},
+	&SnapshotWebhook{},
+	&SnapshotEnvironmentBindingWebhook{},
 }

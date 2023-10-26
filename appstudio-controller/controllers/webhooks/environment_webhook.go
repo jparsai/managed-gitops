@@ -35,9 +35,16 @@ type EnvironmentWebhook struct {
 	log    logr.Logger
 }
 
-// +kubebuilder:webhook:path=/mutate-appstudio-redhat-com-v1alpha1-environment,mutating=true,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=menvironment.kb.io,admissionReviewVersions={v1,v1beta1}
+// change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
+//+kubebuilder:webhook:path=/mutate-appstudio-redhat-com-v1alpha1-environment,mutating=true,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=menvironment.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1alpha1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
+
 func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
+
+	fmt.Println("############## EnvironmentWebhook Register")
+
 	w.client = mgr.GetClient()
+	w.log = *log
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&appstudiov1alpha1.Environment{}).
@@ -45,19 +52,19 @@ func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error 
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1alpha1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
-
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
 
+	fmt.Println("############## EnvironmentWebhook create")
+
 	app := obj.(*appstudiov1alpha1.Environment)
 
-	environmentlog := r.log.WithName("environment-webhook-create").
+	log := r.log.WithName("environment-webhook-create").
 		WithValues("controllerKind", "Environment").
 		WithValues("name", app.Name).
 		WithValues("namespace", app.Namespace)
 
-	environmentlog.Info("validating the create request")
+	log.Info("validating the create request")
 
 	// We use the DNS-1123 format for environment names, so ensure it conforms to that specification
 	if len(validation.IsDNS1123Label(app.Name)) != 0 {
@@ -70,14 +77,16 @@ func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Obj
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
 
+	fmt.Println("############## EnvironmentWebhook update")
+
 	newApp := newObj.(*appstudiov1alpha1.Environment)
 
-	environmentlog := r.log.WithName("environment-webhook-update").
+	log := r.log.WithName("environment-webhook-update").
 		WithValues("controllerKind", "Environment").
 		WithValues("name", newApp.Name).
 		WithValues("namespace", newApp.Namespace)
 
-	environmentlog.Info("validating the update request")
+	log.Info("validating the update request")
 
 	return validateEnvironment(newApp)
 }
@@ -89,6 +98,8 @@ func (r *EnvironmentWebhook) ValidateDelete(ctx context.Context, obj runtime.Obj
 
 // validateEnvironment validates the ingress domain and API URL
 func validateEnvironment(r *appstudiov1alpha1.Environment) error {
+
+	fmt.Println("############## EnvironmentWebhook validateEnvironment")
 
 	unstableConfig := r.Spec.UnstableConfigurationFields
 	if unstableConfig != nil {
