@@ -36,7 +36,6 @@ type EnvironmentWebhook struct {
 }
 
 // change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/mutate-appstudio-redhat-com-v1alpha1-environment,mutating=true,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=menvironment.kb.io,admissionReviewVersions={v1,v1beta1}
 //+kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1alpha1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
 
 func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
