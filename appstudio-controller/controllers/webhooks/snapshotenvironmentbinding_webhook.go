@@ -41,8 +41,6 @@ var snapshotEnvironmentBindingClientFromManager client.Client
 
 func (w *SnapshotEnvironmentBindingWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 
-	fmt.Println("############## SnapshotEnvironmentBindingWebhook Register")
-
 	w.client = mgr.GetClient()
 	w.log = *log
 
@@ -56,8 +54,6 @@ func (w *SnapshotEnvironmentBindingWebhook) Register(mgr ctrl.Manager, log *logr
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *SnapshotEnvironmentBindingWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
-
-	fmt.Println("############## SnapshotEnvironmentBindingWebhook create")
 
 	app := obj.(*appstudiov1alpha1.SnapshotEnvironmentBinding)
 
@@ -77,8 +73,6 @@ func (r *SnapshotEnvironmentBindingWebhook) ValidateCreate(ctx context.Context, 
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *SnapshotEnvironmentBindingWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
-
-	fmt.Println("############## SnapshotEnvironmentBindingWebhook update")
 
 	oldApp := oldObj.(*appstudiov1alpha1.SnapshotEnvironmentBinding)
 	newApp := newObj.(*appstudiov1alpha1.SnapshotEnvironmentBinding)
@@ -107,8 +101,6 @@ func (r *SnapshotEnvironmentBindingWebhook) ValidateDelete(ctx context.Context, 
 }
 
 func validateSEB(newBinding *appstudiov1alpha1.SnapshotEnvironmentBinding) error {
-
-	fmt.Println("############## SnapshotEnvironmentBindingWebhook validateSEB")
 
 	if snapshotEnvironmentBindingClientFromManager == nil {
 		return fmt.Errorf("webhook not initialized")

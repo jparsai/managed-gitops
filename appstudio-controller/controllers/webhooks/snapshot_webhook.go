@@ -39,8 +39,6 @@ type SnapshotWebhook struct {
 
 func (w *SnapshotWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 
-	fmt.Println("############## SnapshotWebhook Register")
-
 	w.client = mgr.GetClient()
 	w.log = *log
 
@@ -53,13 +51,7 @@ func (w *SnapshotWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *SnapshotWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
 
-	fmt.Println("############## SnapshotWebhook create")
-
 	app := obj.(*appstudiov1alpha1.Snapshot)
-
-	fmt.Println("############## SnapshotWebhook = app == ", app)
-	fmt.Println("############## SnapshotWebhook = r == ", r)
-	fmt.Println("############## SnapshotWebhook = r.log == ", r.log)
 
 	log := r.log.WithName("environment-webhook-create").
 		WithValues("controllerKind", "Snapshot").
@@ -73,8 +65,6 @@ func (r *SnapshotWebhook) ValidateCreate(ctx context.Context, obj runtime.Object
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *SnapshotWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
-
-	fmt.Println("############## SnapshotWebhook update")
 
 	oldApp := oldObj.(*appstudiov1alpha1.Snapshot)
 	newApp := newObj.(*appstudiov1alpha1.Snapshot)

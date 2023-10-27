@@ -40,8 +40,6 @@ type EnvironmentWebhook struct {
 
 func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 
-	fmt.Println("############## EnvironmentWebhook Register")
-
 	w.client = mgr.GetClient()
 	w.log = *log
 
@@ -53,8 +51,6 @@ func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error 
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
-
-	fmt.Println("############## EnvironmentWebhook create")
 
 	app := obj.(*appstudiov1alpha1.Environment)
 
@@ -76,8 +72,6 @@ func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Obj
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
 
-	fmt.Println("############## EnvironmentWebhook update")
-
 	newApp := newObj.(*appstudiov1alpha1.Environment)
 
 	log := r.log.WithName("environment-webhook-update").
@@ -97,8 +91,6 @@ func (r *EnvironmentWebhook) ValidateDelete(ctx context.Context, obj runtime.Obj
 
 // validateEnvironment validates the ingress domain and API URL
 func validateEnvironment(r *appstudiov1alpha1.Environment) error {
-
-	fmt.Println("############## EnvironmentWebhook validateEnvironment")
 
 	unstableConfig := r.Spec.UnstableConfigurationFields
 	if unstableConfig != nil {

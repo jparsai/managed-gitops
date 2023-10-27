@@ -39,8 +39,6 @@ type PromotionRunWebhook struct {
 
 func (w *PromotionRunWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 
-	fmt.Println("############## PromotionRunWebhook Register")
-
 	w.client = mgr.GetClient()
 	w.log = *log
 
@@ -52,8 +50,6 @@ func (w *PromotionRunWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *PromotionRunWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
-
-	fmt.Println("############## PromotionRunWebhook create")
 
 	app := obj.(*appstudiov1alpha1.PromotionRun)
 
@@ -69,8 +65,6 @@ func (r *PromotionRunWebhook) ValidateCreate(ctx context.Context, obj runtime.Ob
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *PromotionRunWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
-
-	fmt.Println("############## PromotionRunWebhook update")
 
 	oldApp := oldObj.(*appstudiov1alpha1.PromotionRun)
 	newApp := newObj.(*appstudiov1alpha1.PromotionRun)
