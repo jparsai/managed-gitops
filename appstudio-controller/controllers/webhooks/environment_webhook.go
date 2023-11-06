@@ -23,20 +23,32 @@ import (
 
 	"github.com/go-logr/logr"
 	appstudiov1alpha1 "github.com/redhat-appstudio/application-api/api/v1alpha1"
+	appstudiov1beta1 "github.com/redhat-appstudio/application-api/api/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type EnvironmentV1Alpha1 struct {
+	*appstudiov1alpha1.Environment
+}
+
+type EnvironmentV1Beta1 struct {
+	*appstudiov1beta1.Environment
+}
+
 // Webhook describes the data structure for the release webhook
 type EnvironmentWebhook struct {
-	client client.Client
-	log    logr.Logger
+	client        client.Client
+	log           logr.Logger
+	EnvironmentV1 EnvironmentV1Alpha1
+	EnvironmentV2 EnvironmentV1Beta1
 }
 
 // change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1alpha1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1alpha1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/mutate-appstudio-redhat-com-v1beta1-environment,mutating=true,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1beta1,name=menvironment.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/validate-appstudio-redhat-com-v1beta1-environment,mutating=false,failurePolicy=fail,sideEffects=None,groups=appstudio.redhat.com,resources=environments,verbs=create;update,versions=v1beta1,name=venvironment.kb.io,admissionReviewVersions={v1,v1beta1}
 
 func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error {
 
@@ -51,6 +63,10 @@ func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error 
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+
+	fmt.Println("###############")
+	fmt.Println("ValidateCreate")
+	fmt.Println("###############")
 
 	app := obj.(*appstudiov1alpha1.Environment)
 
