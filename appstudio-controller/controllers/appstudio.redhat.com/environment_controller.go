@@ -189,7 +189,8 @@ func reconcileEnvironment(ctx context.Context, environment appstudioshared.Envir
 		errorConditionSet_false = false
 	)
 
-	if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.Target != nil {
+	//if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.Target != nil {
+	if environment.Spec.Target != nil && !reflect.ValueOf(environment.Spec.Target.KubernetesClusterCredentials).IsZero() && environment.GetDeploymentTargetClaimName() != "" {
 		log.Error(nil, "Environment is invalid since it cannot have both DeploymentTargetClaim and credentials configuration set")
 
 		// Update Status.Conditions field of Environment.
@@ -488,7 +489,8 @@ func generateDesiredResource(ctx context.Context, env appstudioshared.Environmen
 		return nil, errorConditionSet_false, nil
 	}
 
-	if env.Spec.Target != nil {
+	//if env.Spec.Target != nil {
+	if !reflect.ValueOf(env.Spec.Target.KubernetesClusterCredentials).IsZero() {
 		managedEnvDetails.ClusterResources = env.Spec.Target.ClusterResources
 
 		// Make a copy of the Environment's namespaces field

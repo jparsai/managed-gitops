@@ -564,12 +564,12 @@ func generateExpectedGitOpsDeployment(ctx context.Context, component appstudiosh
 	}
 
 	// If the Environment references a DeploymentTargetClaim...
-	if environment.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName != "" {
-
+	//if environment.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName != "" {
+	if environment.Spec.Target != nil && environment.Spec.Target.Claim.DeploymentTargetClaim.ClaimName != "" {
 		// Retrieve the DTC
 		dtc := appstudioshared.DeploymentTargetClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      environment.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName,
+				Name:      environment.Spec.Target.Claim.DeploymentTargetClaim.ClaimName,
 				Namespace: environment.Namespace,
 			},
 		}
@@ -715,7 +715,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetCla
 	for _, env := range envList.Items {
 
 		// If the DTCs match the Environment's claim name, it's a match
-		if env.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName == dtcObj.Name {
+		if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtcObj.Name {
 			environmentByName[env.Name] = true
 		}
 	}
@@ -780,7 +780,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt
 		matchFound := false
 		for _, dtc := range dtcs {
 			// If at least one of the DTCs match the Environment's claim name, it's a match
-			if env.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName == dtc.Name {
+			if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtc.Name {
 				matchFound = true
 				break
 			}

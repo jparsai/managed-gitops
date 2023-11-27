@@ -475,13 +475,19 @@ var _ = Describe("Environment controller tests", func() {
 							APIURL:                   "abc",
 							ClusterCredentialsSecret: "test",
 						},
-					},
-					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: "test-dtc",
 							},
 						},
+					},
+					Configuration: appstudioshared.EnvironmentConfiguration{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: "test-dtc",
+							},
+						},*/
 					},
 				},
 			}
@@ -565,7 +571,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -719,7 +732,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -826,7 +846,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -859,7 +886,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: "a-dtc-that-does-not-exist",
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: "a-dtc-that-does-not-exist",
 							},
@@ -919,7 +953,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -970,7 +1011,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -1074,7 +1122,14 @@ var _ = Describe("Environment controller tests", func() {
 				},
 				Spec: appstudioshared.EnvironmentSpec{
 					Configuration: appstudioshared.EnvironmentConfiguration{
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -1187,7 +1242,14 @@ var _ = Describe("Environment controller tests", func() {
 					},
 					Spec: appstudioshared.EnvironmentSpec{
 						Configuration: appstudioshared.EnvironmentConfiguration{
-							Target: appstudioshared.EnvironmentTarget{
+							/*Target: appstudioshared.EnvironmentTarget{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},*/
+						},
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
 								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 									ClaimName: dtc.Name,
 								},
@@ -1200,12 +1262,22 @@ var _ = Describe("Environment controller tests", func() {
 
 				env2 := appstudioshared.Environment{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-env-2",
-						Namespace: dtc.Namespace,
+						Name:            "test-env-2",
+						Namespace:       dtc.Namespace,
+						ResourceVersion: "",
+					},
+					Spec: appstudioshared.EnvironmentSpec{
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},
+						},
 					},
 				}
-				env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
-				env2.ResourceVersion = ""
+				//env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
+				//env2.ResourceVersion = ""
 				err = k8sClient.Create(ctx, &env2)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -1280,7 +1352,14 @@ var _ = Describe("Environment controller tests", func() {
 					},
 					Spec: appstudioshared.EnvironmentSpec{
 						Configuration: appstudioshared.EnvironmentConfiguration{
-							Target: appstudioshared.EnvironmentTarget{
+							/*Target: appstudioshared.EnvironmentTarget{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},*/
+						},
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
 								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 									ClaimName: dtc.Name,
 								},
@@ -1293,12 +1372,22 @@ var _ = Describe("Environment controller tests", func() {
 
 				env2 := appstudioshared.Environment{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-env-2",
-						Namespace: dtc.Namespace,
+						Name:            "test-env-2",
+						Namespace:       dtc.Namespace,
+						ResourceVersion: "",
+					},
+					Spec: appstudioshared.EnvironmentSpec{
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},
+						},
 					},
 				}
-				env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
-				env2.ResourceVersion = ""
+				//env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
+				//env2.ResourceVersion = ""
 				err = k8sClient.Create(ctx, &env2)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -1393,7 +1482,14 @@ var _ = Describe("Environment controller tests", func() {
 					},
 					Spec: appstudioshared.EnvironmentSpec{
 						Configuration: appstudioshared.EnvironmentConfiguration{
-							Target: appstudioshared.EnvironmentTarget{
+							/*Target: appstudioshared.EnvironmentTarget{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},*/
+						},
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
 								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 									ClaimName: dtc.Name,
 								},
@@ -1409,8 +1505,17 @@ var _ = Describe("Environment controller tests", func() {
 						Name:      "test-env-2",
 						Namespace: dtc.Namespace,
 					},
+					Spec: appstudioshared.EnvironmentSpec{
+						Target: &appstudioshared.TargetConfiguration{
+							Claim: appstudioshared.TargetClaim{
+								DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+									ClaimName: dtc.Name,
+								},
+							},
+						},
+					},
 				}
-				env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
+				//env2.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName = dtc.Name
 				err = k8sClient.Create(ctx, &env2)
 				Expect(err).ToNot(HaveOccurred())
 

@@ -670,16 +670,20 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler E2E tests", func() {
 
 				envObj, ok := obj.(*appstudiosharedv1.Environment)
 				Expect(ok).To(BeTrue())
-				envObj.Spec.Target = nil
+				envObj.Spec.Target.Claim = appstudiosharedv1.TargetClaim{
+					DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
+						ClaimName: dtc.Name,
+					},
+				}
 				envObj.Spec.Configuration = appstudiosharedv1.EnvironmentConfiguration{
 					Env: []appstudiosharedv1.EnvVarPair{
 						{Name: "e1", Value: "v1"},
 					},
-					Target: appstudiosharedv1.EnvironmentTarget{
+					/*Target: appstudiosharedv1.EnvironmentTarget{
 						DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
 							ClaimName: dtc.Name,
 						},
-					},
+					},*/
 				}
 
 			})

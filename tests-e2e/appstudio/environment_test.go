@@ -69,7 +69,14 @@ var _ = Describe("Environment Status.Conditions tests", func() {
 						Env: []appstudioshared.EnvVarPair{
 							{Name: "e1", Value: "v1"},
 						},
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: "test",
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: "test",
 							},
@@ -114,16 +121,21 @@ var _ = Describe("Environment Status.Conditions tests", func() {
 							APIURL:                   "https://abc",
 							ClusterCredentialsSecret: "test",
 						},
+						Claim: appstudioshared.TargetClaim{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: "testdtc",
+							},
+						},
 					},
 					Configuration: appstudioshared.EnvironmentConfiguration{
 						Env: []appstudioshared.EnvVarPair{
 							{Name: "e1", Value: "v1"},
 						},
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: "testdtc",
 							},
-						},
+						},*/
 					},
 				},
 			}
@@ -399,7 +411,14 @@ var _ = Describe("Environment E2E tests", func() {
 						Env: []appstudioshared.EnvVarPair{
 							{Name: "e1", Value: "v1"},
 						},
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -485,7 +504,14 @@ var _ = Describe("Environment E2E tests", func() {
 						Env: []appstudioshared.EnvVarPair{
 							{Name: "e1", Value: "v1"},
 						},
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
@@ -581,7 +607,14 @@ var _ = Describe("Environment E2E tests", func() {
 						Env: []appstudioshared.EnvVarPair{
 							{Name: "e1", Value: "v1"},
 						},
-						Target: appstudioshared.EnvironmentTarget{
+						/*Target: appstudioshared.EnvironmentTarget{
+							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},*/
+					},
+					Target: &appstudioshared.TargetConfiguration{
+						Claim: appstudioshared.TargetClaim{
 							DeploymentTargetClaim: appstudioshared.DeploymentTargetClaimConfig{
 								ClaimName: dtc.Name,
 							},
