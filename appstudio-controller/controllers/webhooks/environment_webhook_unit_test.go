@@ -37,7 +37,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 			Name: "kubernetes-environment",
 		},
 		Spec: appstudiov1alpha1.EnvironmentSpec{
-			UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+			Target: &appstudiov1alpha1.TargetConfiguration{
 				ClusterType: appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 				KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 					IngressDomain: "domain",
@@ -59,7 +59,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType:                  appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{},
 					},
@@ -74,7 +74,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: badIngressDomain,
@@ -94,7 +94,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: nil,
+					Target: nil,
 				},
 			},
 		},
@@ -105,7 +105,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							TargetNamespace: "mynamespace",
@@ -122,7 +122,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: badIngressDomain,
@@ -137,7 +137,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment-1",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",
@@ -153,7 +153,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "Kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",
@@ -169,7 +169,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetesEnvironment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",
@@ -185,7 +185,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: strings.Repeat("abcde", 13),
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: badIngressDomain,
@@ -202,7 +202,7 @@ func TestEnvironmentCreateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment-1",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",
@@ -243,7 +243,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 			Name: "kubernetes-environment",
 		},
 		Spec: appstudiov1alpha1.EnvironmentSpec{
-			UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+			Target: &appstudiov1alpha1.TargetConfiguration{
 				ClusterType: appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 				KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 					IngressDomain: "domain",
@@ -265,7 +265,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType:                  appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{},
 					},
@@ -280,7 +280,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_Kubernetes,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: badIngressDomain,
@@ -300,7 +300,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: nil,
+					Target: nil,
 				},
 			},
 		},
@@ -311,7 +311,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType:                  appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{},
 					},
@@ -325,7 +325,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",
@@ -342,7 +342,7 @@ func TestEnvironmentUpdateValidatingWebhook(t *testing.T) {
 					Name: "kubernetes-environment-1",
 				},
 				Spec: appstudiov1alpha1.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudiov1alpha1.UnstableEnvironmentConfiguration{
+					Target: &appstudiov1alpha1.TargetConfiguration{
 						ClusterType: appstudiov1alpha1.ConfigurationClusterType_OpenShift,
 						KubernetesClusterCredentials: appstudiov1alpha1.KubernetesClusterCredentials{
 							IngressDomain: "domain",

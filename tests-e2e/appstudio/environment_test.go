@@ -109,7 +109,7 @@ var _ = Describe("Environment Status.Conditions tests", func() {
 					Namespace: fixture.GitOpsServiceE2ENamespace,
 				},
 				Spec: appstudioshared.EnvironmentSpec{
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
+					Target: &appstudioshared.TargetConfiguration{
 						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 							APIURL:                   "https://abc",
 							ClusterCredentialsSecret: "test",
@@ -203,7 +203,7 @@ var _ = Describe("Environment E2E tests", func() {
 							{Name: "e1", Value: "v1"},
 						},
 					},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
+					Target: &appstudioshared.TargetConfiguration{
 						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 							TargetNamespace:            fixture.GitOpsServiceE2ENamespace,
 							APIURL:                     apiServerURL,
@@ -230,7 +230,7 @@ var _ = Describe("Environment E2E tests", func() {
 
 			Eventually(managedEnvCR, "2m", "1s").Should(
 				SatisfyAll(
-					managedenvironment.HaveAllowInsecureSkipTLSVerify(environment.Spec.UnstableConfigurationFields.AllowInsecureSkipTLSVerify),
+					managedenvironment.HaveAllowInsecureSkipTLSVerify(environment.Spec.Target.AllowInsecureSkipTLSVerify),
 				),
 			)
 
@@ -238,7 +238,7 @@ var _ = Describe("Environment E2E tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("update AllowInsecureSkipTLSVerify field of Environment to false and verify whether it updates the AllowInsecureSkipTLSVerify field of GitOpsDeploymentManagedEnvironment")
-			environment.Spec.UnstableConfigurationFields = &appstudioshared.UnstableEnvironmentConfiguration{
+			environment.Spec.Target = &appstudioshared.TargetConfiguration{
 				KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 					TargetNamespace:            fixture.GitOpsServiceE2ENamespace,
 					APIURL:                     apiServerURL,
@@ -255,7 +255,7 @@ var _ = Describe("Environment E2E tests", func() {
 
 			Eventually(managedEnvCR, "2m", "1s").Should(
 				SatisfyAll(
-					managedenvironment.HaveAllowInsecureSkipTLSVerify(environment.Spec.UnstableConfigurationFields.AllowInsecureSkipTLSVerify),
+					managedenvironment.HaveAllowInsecureSkipTLSVerify(environment.Spec.Target.AllowInsecureSkipTLSVerify),
 				),
 			)
 
@@ -278,7 +278,7 @@ var _ = Describe("Environment E2E tests", func() {
 							{Name: "e1", Value: "v1"},
 						},
 					},
-					UnstableConfigurationFields: &appstudioshared.UnstableEnvironmentConfiguration{
+					Target: &appstudioshared.TargetConfiguration{
 						KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 							TargetNamespace:            fixture.GitOpsServiceE2ENamespace,
 							APIURL:                     apiServerURL,
@@ -307,8 +307,8 @@ var _ = Describe("Environment E2E tests", func() {
 
 			Eventually(managedEnvCR, "2m", "1s").Should(
 				SatisfyAll(
-					managedenvironment.HaveClusterResources(environment.Spec.UnstableConfigurationFields.ClusterResources),
-					managedenvironment.HaveNamespaces(environment.Spec.UnstableConfigurationFields.Namespaces),
+					managedenvironment.HaveClusterResources(environment.Spec.Target.ClusterResources),
+					managedenvironment.HaveNamespaces(environment.Spec.Target.Namespaces),
 				),
 			)
 
@@ -316,7 +316,7 @@ var _ = Describe("Environment E2E tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("update the namespaces and clusterResources fields of Environment and verify that it updates the corresponding fields of GitOpsDeploymentManagedEnvironment")
-			environment.Spec.UnstableConfigurationFields = &appstudioshared.UnstableEnvironmentConfiguration{
+			environment.Spec.Target = &appstudioshared.TargetConfiguration{
 				KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 					TargetNamespace:            fixture.GitOpsServiceE2ENamespace,
 					APIURL:                     apiServerURL,
@@ -336,13 +336,13 @@ var _ = Describe("Environment E2E tests", func() {
 
 			Eventually(managedEnvCR, "2m", "1s").Should(
 				SatisfyAll(
-					managedenvironment.HaveClusterResources(environment.Spec.UnstableConfigurationFields.ClusterResources),
-					managedenvironment.HaveNamespaces(environment.Spec.UnstableConfigurationFields.Namespaces),
+					managedenvironment.HaveClusterResources(environment.Spec.Target.ClusterResources),
+					managedenvironment.HaveNamespaces(environment.Spec.Target.Namespaces),
 				),
 			)
 
 			By("remove the namespaces field from Environment and set clusterResources to false and verify that it updates the corresponding fields of GitOpsDeploymentManagedEnvironment")
-			environment.Spec.UnstableConfigurationFields = &appstudioshared.UnstableEnvironmentConfiguration{
+			environment.Spec.Target = &appstudioshared.TargetConfiguration{
 				KubernetesClusterCredentials: appstudioshared.KubernetesClusterCredentials{
 					TargetNamespace:            fixture.GitOpsServiceE2ENamespace,
 					APIURL:                     apiServerURL,
@@ -358,8 +358,8 @@ var _ = Describe("Environment E2E tests", func() {
 
 			Eventually(managedEnvCR, "2m", "1s").Should(
 				SatisfyAll(
-					managedenvironment.HaveClusterResources(environment.Spec.UnstableConfigurationFields.ClusterResources),
-					managedenvironment.HaveNamespaces(environment.Spec.UnstableConfigurationFields.Namespaces),
+					managedenvironment.HaveClusterResources(environment.Spec.Target.ClusterResources),
+					managedenvironment.HaveNamespaces(environment.Spec.Target.Namespaces),
 				),
 			)
 

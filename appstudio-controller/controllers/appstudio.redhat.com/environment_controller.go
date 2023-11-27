@@ -189,7 +189,7 @@ func reconcileEnvironment(ctx context.Context, environment appstudioshared.Envir
 		errorConditionSet_false = false
 	)
 
-	if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.UnstableConfigurationFields != nil {
+	if environment.GetDeploymentTargetClaimName() != "" && environment.Spec.Target != nil {
 		log.Error(nil, "Environment is invalid since it cannot have both DeploymentTargetClaim and credentials configuration set")
 
 		// Update Status.Conditions field of Environment.
@@ -474,12 +474,12 @@ func generateDesiredResource(ctx context.Context, env appstudioshared.Environmen
 			Namespaces:                 namespacesField,
 		}
 
-	} else if env.Spec.UnstableConfigurationFields != nil {
+	} else if env.Spec.Target != nil {
 		log.Info("Using the cluster credentials specified in the Environment")
 		managedEnvDetails = managedgitopsv1alpha1.GitOpsDeploymentManagedEnvironmentSpec{
-			APIURL:                     env.Spec.UnstableConfigurationFields.KubernetesClusterCredentials.APIURL,
-			ClusterCredentialsSecret:   env.Spec.UnstableConfigurationFields.ClusterCredentialsSecret,
-			AllowInsecureSkipTLSVerify: env.Spec.UnstableConfigurationFields.KubernetesClusterCredentials.AllowInsecureSkipTLSVerify,
+			APIURL:                     env.Spec.Target.KubernetesClusterCredentials.APIURL,
+			ClusterCredentialsSecret:   env.Spec.Target.ClusterCredentialsSecret,
+			AllowInsecureSkipTLSVerify: env.Spec.Target.KubernetesClusterCredentials.AllowInsecureSkipTLSVerify,
 		}
 	} else {
 		// Don't process the Environment configuration fields if they are empty:
@@ -488,12 +488,12 @@ func generateDesiredResource(ctx context.Context, env appstudioshared.Environmen
 		return nil, errorConditionSet_false, nil
 	}
 
-	if env.Spec.UnstableConfigurationFields != nil {
-		managedEnvDetails.ClusterResources = env.Spec.UnstableConfigurationFields.ClusterResources
+	if env.Spec.Target != nil {
+		managedEnvDetails.ClusterResources = env.Spec.Target.ClusterResources
 
 		// Make a copy of the Environment's namespaces field
-		size := len(env.Spec.UnstableConfigurationFields.Namespaces)
-		managedEnvDetails.Namespaces = append(make([]string, 0, size), env.Spec.UnstableConfigurationFields.Namespaces...)
+		size := len(env.Spec.Target.Namespaces)
+		managedEnvDetails.Namespaces = append(make([]string, 0, size), env.Spec.Target.Namespaces...)
 	}
 
 	// 1) Retrieve the secret that the Environment is pointing to

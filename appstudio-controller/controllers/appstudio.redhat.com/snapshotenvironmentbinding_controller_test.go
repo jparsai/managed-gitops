@@ -670,7 +670,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("creating an Environment that references the DTC")
-			environment.Spec.UnstableConfigurationFields = nil
+			environment.Spec.Target = nil
 			environment.Spec.Configuration.Target = appstudiosharedv1.EnvironmentTarget{
 				DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
 					ClaimName: dtc.Name,
@@ -708,7 +708,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 		It("should verify that if the Environment contains configuration information, that it is included in the generated GitOpsDeployment", func() {
 
 			By("creating an Environment with valid configuration fields")
-			environment.Spec.UnstableConfigurationFields = &appstudiosharedv1.UnstableEnvironmentConfiguration{
+			environment.Spec.Target = &appstudiosharedv1.TargetConfiguration{
 				KubernetesClusterCredentials: appstudiosharedv1.KubernetesClusterCredentials{
 					TargetNamespace:          "my-target-namespace",
 					APIURL:                   "my-api-url",
@@ -739,11 +739,11 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 
 			managedEnvironmentName := generateEmptyManagedEnvironment(environment.Name, environment.Namespace).Name
 
-			Expect(gitopsDeployment.Spec.Destination.Namespace).To(Equal(environment.Spec.UnstableConfigurationFields.TargetNamespace))
+			Expect(gitopsDeployment.Spec.Destination.Namespace).To(Equal(environment.Spec.Target.TargetNamespace))
 			Expect(gitopsDeployment.Spec.Destination.Environment).To(Equal(managedEnvironmentName))
 
 			By("removing the field from Environment, and ensuring the GitOpsDeployment is updated")
-			environment.Spec.UnstableConfigurationFields = nil
+			environment.Spec.Target = nil
 			err = bindingReconciler.Client.Update(ctx, &environment)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -757,7 +757,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 			Expect(gitopsDeployment.Spec.Destination.Environment).To(Equal(""))
 
 			By("testing with a missing TargetNamespace, which should return an error")
-			environment.Spec.UnstableConfigurationFields = &appstudiosharedv1.UnstableEnvironmentConfiguration{
+			environment.Spec.Target = &appstudiosharedv1.TargetConfiguration{
 				KubernetesClusterCredentials: appstudiosharedv1.KubernetesClusterCredentials{
 					APIURL:                   "my-api-url",
 					ClusterCredentialsSecret: "secret",
