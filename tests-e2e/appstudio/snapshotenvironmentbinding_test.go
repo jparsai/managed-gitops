@@ -566,7 +566,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler E2E tests", func() {
 			}))
 		})
 
-		It("ensures that GitOpsDeployments .spec.destination.namespace field always matching the expected Environment value", func() {
+		FIt("ensures that GitOpsDeployments .spec.destination.namespace field always matching the expected Environment value", func() {
 			By("creating a new Environment targetting a fake remote cluster")
 			environment := appstudiosharedv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -670,11 +670,31 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler E2E tests", func() {
 
 				envObj, ok := obj.(*appstudiosharedv1.Environment)
 				Expect(ok).To(BeTrue())
-				envObj.Spec.Target.Claim = appstudiosharedv1.TargetClaim{
-					DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
-						ClaimName: dtc.Name,
-					},
+
+				fmt.Println("##################################################################")
+				fmt.Println("##################################################################")
+				fmt.Println("#### envObj.Spec.Target == ", envObj.Spec.Target)
+
+				if envObj.Spec.Target != nil {
+					fmt.Println("1111 ####################")
+
+					envObj.Spec.Target.Claim = appstudiosharedv1.TargetClaim{
+						DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
+							ClaimName: dtc.Name,
+						},
+					}
+				} else {
+					fmt.Println("2222 ###################")
+
+					envObj.Spec.Target = &appstudiosharedv1.TargetConfiguration{
+						Claim: appstudiosharedv1.TargetClaim{
+							DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
+								ClaimName: dtc.Name,
+							},
+						},
+					}
 				}
+
 				envObj.Spec.Configuration = appstudiosharedv1.EnvironmentConfiguration{
 					Env: []appstudiosharedv1.EnvVarPair{
 						{Name: "e1", Value: "v1"},
