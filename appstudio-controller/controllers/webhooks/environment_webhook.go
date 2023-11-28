@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	appstudiov1alpha1 "github.com/redhat-appstudio/application-api/api/v1alpha1"
@@ -106,7 +107,7 @@ func validateEnvironment(r *appstudiov1alpha1.Environment) error {
 
 	}
 
-	if r.Spec.Target != nil && r.Spec.Target.KubernetesClusterCredentials.APIURL != "" {
+	if r.Spec.Target != nil && !reflect.ValueOf(r.Spec.Target.KubernetesClusterCredentials).IsZero() && r.Spec.Target.KubernetesClusterCredentials.APIURL != "" {
 		if _, err := url.ParseRequestURI(r.Spec.Target.KubernetesClusterCredentials.APIURL); err != nil {
 			return fmt.Errorf(err.Error() + appstudiov1alpha1.InvalidAPIURL)
 		}
