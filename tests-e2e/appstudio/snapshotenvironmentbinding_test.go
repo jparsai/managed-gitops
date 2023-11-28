@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture"
-	dtcfixture "github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/deploymenttargetclaim"
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
