@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture"
+	dtcfixture "github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/deploymenttargetclaim"
 	"github.com/redhat-appstudio/managed-gitops/tests-e2e/fixture/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -565,7 +566,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler E2E tests", func() {
 			}))
 		})
 
-		/*FIt("ensures that GitOpsDeployments .spec.destination.namespace field always matching the expected Environment value", func() {
+		It("ensures that GitOpsDeployments .spec.destination.namespace field always matching the expected Environment value", func() {
 			By("creating a new Environment targetting a fake remote cluster")
 			environment := appstudiosharedv1.Environment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -745,7 +746,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler E2E tests", func() {
 			Eventually(gitopsDepl, "60s", "1s").
 				Should(gitopsDeplFixture.HaveTargetNamespace("namespace1"), "should match the final NS value set above")
 
-		})*/
+		})
 
 		It("should create a GitOpsDeployment that references cluster credentials specified in Environment", func() {
 			By("creating second managed environment Secret")

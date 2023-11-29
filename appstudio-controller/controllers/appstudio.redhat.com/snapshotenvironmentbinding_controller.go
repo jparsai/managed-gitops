@@ -713,10 +713,11 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetCla
 
 	environmentByName := map[string]bool{} // The keys of this map contain Environments that are referenced by the DTC (which references the DTC)
 	for _, env := range envList.Items {
-
 		// If the DTCs match the Environment's claim name, it's a match
-		if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtcObj.Name {
-			environmentByName[env.Name] = true
+		if env.Spec.Target != nil && !reflect.ValueOf(env.Spec.Target.Claim).IsZero() && !reflect.ValueOf(env.Spec.Target.Claim.DeploymentTargetClaim).IsZero() {
+			if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtcObj.Name {
+				environmentByName[env.Name] = true
+			}
 		}
 	}
 
@@ -780,9 +781,11 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTarget(dt
 		matchFound := false
 		for _, dtc := range dtcs {
 			// If at least one of the DTCs match the Environment's claim name, it's a match
-			if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtc.Name {
-				matchFound = true
-				break
+			if env.Spec.Target != nil && !reflect.ValueOf(env.Spec.Target.Claim).IsZero() && !reflect.ValueOf(env.Spec.Target.Claim.DeploymentTargetClaim).IsZero() {
+				if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtc.Name {
+					matchFound = true
+					break
+				}
 			}
 		}
 
