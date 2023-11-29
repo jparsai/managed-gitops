@@ -53,8 +53,6 @@ func (w *EnvironmentWebhook) Register(mgr ctrl.Manager, log *logr.Logger) error 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
 
-	fmt.Println("$$$$$$$$$$$$$$$$$$ ValidateCreate")
-
 	app := obj.(*appstudiov1alpha1.Environment)
 
 	log := r.log.WithName("environment-webhook-create").
@@ -74,8 +72,6 @@ func (r *EnvironmentWebhook) ValidateCreate(ctx context.Context, obj runtime.Obj
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *EnvironmentWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
-
-	fmt.Println("$$$$$$$$$$$$$$$$$$ ValidateUpdate")
 
 	newApp := newObj.(*appstudiov1alpha1.Environment)
 
@@ -97,12 +93,7 @@ func (r *EnvironmentWebhook) ValidateDelete(ctx context.Context, obj runtime.Obj
 // validateEnvironment validates the ingress domain and API URL
 func validateEnvironment(r *appstudiov1alpha1.Environment) error {
 
-	fmt.Println("$$$$$$$$$$$$$$$$$$ validateEnvironment")
-
 	unstableConfig := r.Spec.Target
-
-	fmt.Println("$$$$$$$$$$$$$$$$$$ validateEnvironment unstableConfig = ", unstableConfig)
-
 	if unstableConfig != nil {
 		// if cluster type is Kubernetes, then Ingress Domain should be set
 		if unstableConfig.ClusterType == appstudiov1alpha1.ConfigurationClusterType_Kubernetes && unstableConfig.IngressDomain == "" {
@@ -116,15 +107,11 @@ func validateEnvironment(r *appstudiov1alpha1.Environment) error {
 
 	}
 
-	fmt.Println("$$$$$$$$$$$$$$$$$$ validateEnvironment 111")
-
 	if r.Spec.Target != nil && !reflect.ValueOf(r.Spec.Target.KubernetesClusterCredentials).IsZero() && r.Spec.Target.KubernetesClusterCredentials.APIURL != "" {
 		if _, err := url.ParseRequestURI(r.Spec.Target.KubernetesClusterCredentials.APIURL); err != nil {
 			return fmt.Errorf(err.Error() + appstudiov1alpha1.InvalidAPIURL)
 		}
 	}
-
-	fmt.Println("$$$$$$$$$$$$$$$$$$ validateEnvironment 222")
 
 	return nil
 }

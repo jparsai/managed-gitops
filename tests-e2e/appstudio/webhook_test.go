@@ -227,9 +227,6 @@ var _ = Describe("Webhook E2E tests", func() {
 		})
 
 		It("Should validate Environment CR Webhooks.", func() {
-
-			fmt.Println("@@@@@@@@@@@@@@@@@@@")
-
 			k8sClient, err = fixture.GetE2ETestUserWorkspaceKubeClient()
 			Expect(err).To(Succeed())
 
@@ -249,9 +246,6 @@ var _ = Describe("Webhook E2E tests", func() {
 		})
 
 		It("Should validate Environment CR Webhooks for invalid KubernetesClusterCredentials API URL.", func() {
-
-			fmt.Println("@@@@@@@@@@@@@@@@@@@")
-
 			k8sClient, err = fixture.GetE2ETestUserWorkspaceKubeClient()
 			Expect(err).To(Succeed())
 

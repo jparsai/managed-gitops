@@ -632,7 +632,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 		})
 
 		It("should verify that if the Environment references a DeploymentTargetClaim, and the DT references a Namespace, that the Namespace is included in the generated GitOpsDeployment", func() {
-			//////////////////////////////
+
 			dtc := appstudiosharedv1.DeploymentTargetClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-claim",
@@ -670,13 +670,6 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("creating an Environment that references the DTC")
-
-			/*environment.Spec.Target = nil
-			environment.Spec.Configuration.Target = appstudiosharedv1.EnvironmentTarget{
-				DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
-					ClaimName: dtc.Name,
-				},
-			}*/
 
 			environment.Spec.Target = &appstudiosharedv1.TargetConfiguration{
 				Claim: appstudiosharedv1.TargetClaim{
@@ -1205,14 +1198,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 						Namespace: apiNamespace.Name,
 					},
 					Spec: appstudiosharedv1.EnvironmentSpec{
-						DisplayName:   "my-env",
-						Configuration: appstudiosharedv1.EnvironmentConfiguration{
-							/*Target: appstudiosharedv1.EnvironmentTarget{
-								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
-									ClaimName: dtc.Name,
-								},
-							},*/
-						},
+						DisplayName: "my-env",
 						Target: &appstudiosharedv1.TargetConfiguration{
 							Claim: appstudiosharedv1.TargetClaim{
 								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
@@ -1331,14 +1317,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 						Namespace: apiNamespace.Name,
 					},
 					Spec: appstudiosharedv1.EnvironmentSpec{
-						DisplayName:   "my-env",
-						Configuration: appstudiosharedv1.EnvironmentConfiguration{
-							/*Target: appstudiosharedv1.EnvironmentTarget{
-								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
-									ClaimName: dtc.Name,
-								},
-							},*/
-						},
+						DisplayName: "my-env",
 						Target: &appstudiosharedv1.TargetConfiguration{
 							Claim: appstudiosharedv1.TargetClaim{
 								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
@@ -1403,14 +1382,7 @@ var _ = Describe("SnapshotEnvironmentBinding Reconciler Tests", func() {
 						Namespace: apiNamespace.Name,
 					},
 					Spec: appstudiosharedv1.EnvironmentSpec{
-						DisplayName:   "my-env",
-						Configuration: appstudiosharedv1.EnvironmentConfiguration{
-							/*Target: appstudiosharedv1.EnvironmentTarget{
-								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{
-									ClaimName: dtc.Name,
-								},
-							},*/
-						},
+						DisplayName: "my-env",
 						Target: &appstudiosharedv1.TargetConfiguration{
 							Claim: appstudiosharedv1.TargetClaim{
 								DeploymentTargetClaim: appstudiosharedv1.DeploymentTargetClaimConfig{

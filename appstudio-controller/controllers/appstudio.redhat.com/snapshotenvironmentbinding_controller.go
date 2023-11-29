@@ -564,8 +564,8 @@ func generateExpectedGitOpsDeployment(ctx context.Context, component appstudiosh
 	}
 
 	// If the Environment references a DeploymentTargetClaim...
-	//if environment.Spec.Configuration.Target.DeploymentTargetClaim.ClaimName != "" {
 	if environment.Spec.Target != nil && environment.Spec.Target.Claim.DeploymentTargetClaim.ClaimName != "" {
+
 		// Retrieve the DTC
 		dtc := appstudioshared.DeploymentTargetClaim{
 			ObjectMeta: metav1.ObjectMeta{
@@ -713,6 +713,7 @@ func (r *SnapshotEnvironmentBindingReconciler) findObjectsForDeploymentTargetCla
 
 	environmentByName := map[string]bool{} // The keys of this map contain Environments that are referenced by the DTC (which references the DTC)
 	for _, env := range envList.Items {
+
 		// If the DTCs match the Environment's claim name, it's a match
 		if env.Spec.Target != nil && !reflect.ValueOf(env.Spec.Target.Claim).IsZero() && !reflect.ValueOf(env.Spec.Target.Claim.DeploymentTargetClaim).IsZero() {
 			if env.Spec.Target.Claim.DeploymentTargetClaim.ClaimName == dtcObj.Name {
