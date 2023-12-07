@@ -224,10 +224,10 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 			Expect(&dtc).Should(k8s.HasAnnotation(appstudiosharedv1.AnnBoundByController, appstudiosharedv1.AnnBinderValueTrue, k8sClient))
 			Eventually(dtc, "3m", "1s").Should(dtcfixture.HaveDeploymentTargetClaimCondition(
 				metav1.Condition{
-					Type:    appstudiocontrollers.DeploymentTargetConditionTypeErrorOccurred,
+					Type:    appstudiocontrollers.DeploymentTargetClaimConditionTypeErrorOccurred,
 					Message: "",
 					Status:  metav1.ConditionTrue,
-					Reason:  appstudiocontrollers.DeploymentTargetReasonBound,
+					Reason:  appstudiocontrollers.DeploymentTargetClaimReasonBound,
 				}))
 
 			By("Step 9 - Ensure a managed environment exists and that it is owned by the environment")
@@ -465,10 +465,10 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 
 			Eventually(dtc, "3m", "1s").Should(dtcfixture.HaveDeploymentTargetClaimCondition(
 				metav1.Condition{
-					Type:    appstudiocontrollers.DeploymentTargetConditionTypeErrorOccurred,
+					Type:    appstudiocontrollers.DeploymentTargetClaimConditionTypeErrorOccurred,
 					Message: "unable to handle provisioning of space request for dynamic DTC",
 					Status:  metav1.ConditionFalse,
-					Reason:  appstudiocontrollers.DeploymentTargetReasonErrorOccurred,
+					Reason:  appstudiocontrollers.DeploymentTargetClaimReasonErrorOccurred,
 				}))
 		})
 	})
