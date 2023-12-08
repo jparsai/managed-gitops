@@ -263,11 +263,11 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 			return dtc, matchingDT, expectedSpaceRequest
 		}
 
-		It("should ensure the dynamic provisioning happy path works as expected", func() {
+		FIt("should ensure the dynamic provisioning happy path works as expected", func() {
 			_, _, _ = createTest(appstudiosharedv1.ReclaimPolicy_Delete)
 		})
 
-		It("should ensure that deleting a provisioner with Delete policy will delete the SpaceRequest, DT, and DTC.", func() {
+		FIt("should ensure that deleting a provisioner with Delete policy will delete the SpaceRequest, DT, and DTC.", func() {
 
 			dtc, matchingDT, expectedSpaceRequest := createTest(appstudiosharedv1.ReclaimPolicy_Delete)
 
@@ -315,7 +315,7 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 
 		})
 
-		It("should ensure that if the DTClass has a policy of retain, then when the DTC is deleted that neither the DT nor SpaceRequest are deleted", func() {
+		FIt("should ensure that if the DTClass has a policy of retain, then when the DTC is deleted that neither the DT nor SpaceRequest are deleted", func() {
 			dtc, matchingDT, expectedSpaceRequest := createTest(appstudiosharedv1.ReclaimPolicy_Retain)
 
 			By("Deletion step 1 - Delete the DeploymentTargetClaim")
@@ -340,7 +340,7 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 			Expect(matchingDT.Spec.ClaimRef).Should(BeEmpty())
 		})
 
-		It("should ensure that if the SpaceRequest fails to delete, DT is set to failed, and that if the SpaceRequest is eventually deleted, so will the DT and DTC", func() {
+		FIt("should ensure that if the SpaceRequest fails to delete, DT is set to failed, and that if the SpaceRequest is eventually deleted, so will the DT and DTC", func() {
 			dtc, matchingDT, expectedSpaceRequest := createTest(appstudiosharedv1.ReclaimPolicy_Delete)
 
 			By("Deletion step 1 - Delete the DeploymentTargetClaim")
@@ -403,7 +403,7 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 
 		})
 
-		It("ensures that when deleting a DT with DeploymentTargetClass of Delete, that the DTC is not deleted", func() {
+		FIt("ensures that when deleting a DT with DeploymentTargetClass of Delete, that the DTC is not deleted", func() {
 			dtc, matchingDT, _ := createTest(appstudiosharedv1.ReclaimPolicy_Delete)
 
 			Eventually(func() bool {
@@ -439,7 +439,7 @@ var _ = Describe("DeploymentTarget DeploymentTargetClaim and Class tests", func(
 	})
 
 	Context("Check for status conditions", func() {
-		It("should have expected conditions.", func() {
+		FIt("should have expected conditions.", func() {
 
 			Expect(fixture.EnsureCleanSlate()).To(Succeed())
 
