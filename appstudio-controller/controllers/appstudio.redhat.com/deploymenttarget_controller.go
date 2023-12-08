@@ -104,7 +104,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// Update Status.Conditions field of DeploymentTarget.
 	if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, "failed to retrieve DeploymentTargetClass of DeploymentTarget",
 		&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonErrorOccurred, log); err != nil {
-		log.Error(err, "unable to update deployment target status condition.")
+		return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 	}
 
 	if err != nil {
@@ -121,7 +121,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// Update Status.Conditions field of DeploymentTarget.
 		if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, "unexpected reclaim policy value on DeploymentTargetClass",
 			&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonErrorOccurred, log); err != nil {
-			log.Error(err, "unable to update deployment target status condition.")
+			return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -160,7 +160,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// Update Status.Conditions field of DeploymentTarget.
 		if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, "",
 			&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionTrue, DeploymentTargetReasonBound, log); err != nil {
-			log.Error(err, "unable to update deployment target status condition.")
+			return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -193,7 +193,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// Update Status.Conditions field of DeploymentTarget.
 		if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, "unexpected reclaimPolicy: neither Retain nor Delete.",
 			&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonErrorOccurred, log); err != nil {
-			log.Error(err, "unable to update deployment target status condition.")
+			return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -215,7 +215,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// Update Status.Conditions field of DeploymentTarget.
 		if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, fmt.Sprint("failed to find ConditionReady for SpaceRequest: ", sr.Name),
 			&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonErrorOccurred, log); err != nil {
-			log.Error(err, "unable to update deployment target status condition.")
+			return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 		}
 
 		return ctrl.Result{}, fmt.Errorf("failed to find ConditionReady for SpaceRequest %s from %s", sr.Name, sr.Namespace)
@@ -230,7 +230,7 @@ func (r *DeploymentTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			// Update Status.Conditions field of DeploymentTarget.
 			if err := updateStatusConditionOfDeploymentTarget(ctx, r.Client, fmt.Sprint("failed to delete SpaceRequest: ", sr.Name),
 				&dt, DeploymentTargetConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonErrorOccurred, log); err != nil {
-				log.Error(err, "unable to update deployment target status condition.")
+				return ctrl.Result{}, fmt.Errorf("unable to update deployment target status condition. %v", err)
 			}
 
 			return ctrl.Result{}, err
