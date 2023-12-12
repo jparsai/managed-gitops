@@ -82,7 +82,7 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 
 		})
 
-		FIt("should handle a DTC with dynamic provisioning", func() {
+		It("should handle a DTC with dynamic provisioning", func() {
 			By("create a DTC without any target")
 			err := k8sClient.Create(ctx, &dtc)
 			Expect(err).ToNot(HaveOccurred())
@@ -111,7 +111,7 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				dtfixture.HasStatusPhase(appstudiosharedv1.DeploymentTargetPhase_Bound))
 		})
 
-		FIt("should handle a DTC that targets a user created DT", func() {
+		It("should handle a DTC that targets a user created DT", func() {
 			By("create a DTC with a target")
 			dtc.Spec.TargetName = dt.Name
 
@@ -139,7 +139,7 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 			Eventually(&dt).Should(k8s.HasFinalizers([]string{appstudiocontrollers.FinalizerDT}, k8sClient))
 		})
 
-		FIt("should bind with a best match DT in the absence of provisioner/user created DT", func() {
+		It("should bind with a best match DT in the absence of provisioner/user created DT", func() {
 			By("create a fake DTC")
 			// If the DTC doesn't exist, the DeploymentTargetReclaimer controller will
 			// unset the claimRef of a DT
@@ -206,7 +206,7 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				dtfixture.HasStatusPhase(appstudiosharedv1.DeploymentTargetPhase_Bound))
 		})
 
-		FIt("should handle deletion of DTC and release binded DT", func() {
+		It("should handle deletion of DTC and release binded DT", func() {
 			By("create a DT")
 			err := k8sClient.Create(ctx, &dt)
 			Expect(err).ToNot(HaveOccurred())
@@ -249,7 +249,7 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				dtfixture.HasStatusPhase(appstudiosharedv1.DeploymentTargetPhase_Released))
 		})
 
-		FIt("should mark the DTC as Lost if its binded DT is not found", func() {
+		It("should mark the DTC as Lost if its binded DT is not found", func() {
 			By("create a DT")
 			err := k8sClient.Create(ctx, &dt)
 			Expect(err).ToNot(HaveOccurred())
