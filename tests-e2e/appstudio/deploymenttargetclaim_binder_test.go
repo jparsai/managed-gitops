@@ -114,8 +114,8 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				metav1.Condition{
 					Type:    appstudiocontrollers.DeploymentTargetConditionTypeErrorOccurred,
 					Message: "",
-					Status:  metav1.ConditionTrue,
-					Reason:  appstudiocontrollers.DeploymentTargetReasonBound,
+					Status:  metav1.ConditionFalse,
+					Reason:  appstudiocontrollers.DeploymentTargetClaimReasonSuccess,
 				}))
 		})
 
@@ -150,8 +150,8 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				metav1.Condition{
 					Type:    appstudiocontrollers.DeploymentTargetConditionTypeErrorOccurred,
 					Message: "",
-					Status:  metav1.ConditionTrue,
-					Reason:  appstudiocontrollers.DeploymentTargetReasonBound,
+					Status:  metav1.ConditionFalse,
+					Reason:  appstudiocontrollers.DeploymentTargetClaimReasonSuccess,
 				}))
 		})
 
@@ -225,8 +225,8 @@ var _ = Describe("DeploymentTargetClaim Binding controller tests", func() {
 				metav1.Condition{
 					Type:    appstudiocontrollers.DeploymentTargetConditionTypeErrorOccurred,
 					Message: "",
-					Status:  metav1.ConditionTrue,
-					Reason:  appstudiocontrollers.DeploymentTargetReasonBound,
+					Status:  metav1.ConditionFalse,
+					Reason:  appstudiocontrollers.DeploymentTargetClaimReasonSuccess,
 				}))
 		})
 
