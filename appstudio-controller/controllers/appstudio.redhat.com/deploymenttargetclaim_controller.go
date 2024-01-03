@@ -126,7 +126,7 @@ func (r *DeploymentTargetClaimReconciler) Reconcile(ctx context.Context, req ctr
 
 	// No error occurred, and condition was empty, so set the condition to false
 
-	condition = createCondition(DeploymentTargetClaimConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetReasonSuccess, "")
+	condition = createCondition(DeploymentTargetClaimConditionTypeErrorOccurred, metav1.ConditionFalse, DeploymentTargetClaimReasonSuccess, "")
 
 	if err := updateStatusConditionOfDeploymentTargetClaim(ctx, *condition, &applicationv1alpha1.DeploymentTargetClaim{
 		ObjectMeta: metav1.ObjectMeta{
